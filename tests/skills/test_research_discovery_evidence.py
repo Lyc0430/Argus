@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from argus_skill.verticals.research_discovery.evidence import (
     completion_issue,
     validate_package,
@@ -208,6 +210,53 @@ def _valid_project(root: Path, *, decision: str = "recommended") -> Path:
     return root
 
 
+def _add_ineligible_killed_bet(root: Path) -> None:
+    discovery = root / "research" / "discovery"
+    bet_path = discovery / "bets" / "B2" / "BET.json"
+    theory_path = bet_path.with_name("THEORY_EVIDENCE.json")
+    application_path = bet_path.with_name("APPLICATION_EVIDENCE.json")
+    bet = valid_bet(candidate_state="kill")
+    bet.update(id="B2", title="Rejected alternative")
+    theory = valid_theory_evidence()
+    theory.update(
+        bet_id="B2",
+        raw_artifact_refs=["research/discovery/bets/B2/theory.txt"],
+        witness_or_derivation="research/discovery/bets/B2/theory.txt",
+    )
+    application = valid_application_evidence()
+    application.update(
+        bet_id="B2",
+        raw_artifact_refs=["research/discovery/bets/B2/application.txt"],
+    )
+    _write_json(bet_path, bet)
+    _write_json(theory_path, theory)
+    _write_json(application_path, application)
+    theory_path.with_name("theory.txt").write_text("finite check", encoding="utf-8")
+    application_path.with_name("application.txt").write_text("comparison", encoding="utf-8")
+
+    portfolio_path = discovery / "PORTFOLIO.json"
+    portfolio = json.loads(portfolio_path.read_text(encoding="utf-8"))
+    portfolio["bet_refs"].append("research/discovery/bets/B2/BET.json")
+    _write_json(portfolio_path, portfolio)
+
+    decision_path = discovery / "DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"].append(
+        {"bet_id": "B2", "eligible": False, "failed_gates": ["prior art"]}
+    )
+    decision["ordering"].append("B2")
+    decision["bindings"].append(
+        {
+            "bet_id": "B2",
+            "bet_revision": 1,
+            "bet_sha256": _sha(bet_path),
+            "theory_evidence_sha256": _sha(theory_path),
+            "application_evidence_sha256": _sha(application_path),
+        }
+    )
+    _write_json(decision_path, decision)
+
+
 def test_valid_recommended_package_passes(tmp_path: Path) -> None:
     root = _valid_project(tmp_path)
     assert validate_package(root) == []
@@ -369,14 +418,10 @@ def test_proxy_evidence_cannot_exceed_declared_ceiling(tmp_path: Path) -> None:
     assert any("exceeds its declared" in error for error in validate_package(root))
 
 
-def test_recommendation_requires_every_eligibility_gate_to_pass(tmp_path: Path) -> None:
+def test_recommendation_allows_an_ineligible_killed_alternative(tmp_path: Path) -> None:
     root = _valid_project(tmp_path)
-    path = root / "research/discovery/DECISION.json"
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["eligibility"][0]["eligible"] = False
-    payload["eligibility"][0]["failed_gates"] = ["novelty"]
-    _write_json(path, payload)
-    assert any("every eligibility gate" in error for error in validate_package(root))
+    _add_ineligible_killed_bet(root)
+    assert validate_package(root) == []
 
 
 def test_no_bet_requires_park_or_kill_disposition(tmp_path: Path) -> None:
@@ -398,3 +443,60 @@ def test_module_help_does_not_emit_import_warning() -> None:
     assert result.returncode == 0
     assert result.stderr == ""
     assert "{check}" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("filename", "error_code"),
+    [
+        ("THEORY_EVIDENCE.json", "invalid_theory_evidence"),
+        ("APPLICATION_EVIDENCE.json", "invalid_application_evidence"),
+    ],
+)
+def test_missing_lane_file_returns_stable_validation_error(
+    tmp_path: Path, filename: str, error_code: str
+) -> None:
+    root = _valid_project(tmp_path)
+    (root / "research/discovery/bets/B1" / filename).unlink()
+    errors = validate_package(root)
+    assert any(error.startswith(f"{error_code}:B1:") for error in errors)
+    assert completion_issue(root) == f"research_discovery:{error_code}"
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "error_code"),
+    [
+        ("research/discovery/bets/B1/THEORY_EVIDENCE.json", "invalid_theory_evidence"),
+        ("research/discovery/bets/B1/APPLICATION_EVIDENCE.json", "invalid_application_evidence"),
+        ("research/discovery/DECISION.json", "invalid_decision"),
+    ],
+)
+def test_invalid_utf8_canonical_json_returns_stable_validation_error(
+    tmp_path: Path, relative_path: str, error_code: str
+) -> None:
+    root = _valid_project(tmp_path)
+    (root / relative_path).write_bytes(b"{\xff}")
+    assert any(error.startswith(f"{error_code}:") for error in validate_package(root))
+
+
+def test_symlinked_bet_reference_is_rejected_before_resolution(tmp_path: Path) -> None:
+    root = _valid_project(tmp_path)
+    _add_ineligible_killed_bet(root)
+    portfolio_path = root / "research/discovery/PORTFOLIO.json"
+    portfolio = json.loads(portfolio_path.read_text(encoding="utf-8"))
+    portfolio["bet_refs"] = ["research/discovery/bets/B1/BET.json"]
+    _write_json(portfolio_path, portfolio)
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision.update(
+        eligibility=decision["eligibility"][:1],
+        ordering=decision["ordering"][:1],
+        bindings=decision["bindings"][:1],
+    )
+    _write_json(decision_path, decision)
+    first_bet = root / "research/discovery/bets/B1/BET.json"
+    first_bet.unlink()
+    first_bet.symlink_to(Path("../B2/BET.json"))
+    assert any(
+        error.startswith("invalid_portfolio:") and "unsafe" in error
+        for error in validate_package(root)
+    )

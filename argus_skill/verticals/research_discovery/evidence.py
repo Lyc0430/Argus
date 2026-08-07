@@ -67,7 +67,12 @@ def _safe_ref(root: Path, value: object, *, suffix: str) -> Path | None:
     relative = Path(value)
     if relative.is_absolute() or ".." in relative.parts or relative.suffix != suffix:
         return None
-    candidate = (root / relative).resolve()
+    unresolved = root
+    for part in relative.parts:
+        unresolved /= part
+        if unresolved.is_symlink():
+            return None
+    candidate = unresolved.resolve()
     if root != candidate and root not in candidate.parents:
         return None
     return candidate if candidate.is_file() and not candidate.is_symlink() else None
@@ -78,7 +83,7 @@ def _load_object(path: Path) -> dict[str, Any] | None:
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
 
@@ -268,13 +273,20 @@ def _validate_decision(
             errors.append("recommended bet is not in portfolio")
         if len(selected_ids) != 1 or selected_ids != [recommended_id]:
             errors.append("recommended requires exactly one selected bet")
-        if not isinstance(eligibility, list) or any(
-            not isinstance(row, dict)
-            or row.get("eligible") is not True
-            or row.get("failed_gates") != []
-            for row in eligibility
+        recommended_eligibility = next(
+            (
+                row
+                for row in eligibility
+                if isinstance(row, dict) and row.get("bet_id") == recommended_id
+            ),
+            None,
+        ) if isinstance(eligibility, list) else None
+        if (
+            not isinstance(recommended_eligibility, dict)
+            or recommended_eligibility.get("eligible") is not True
+            or recommended_eligibility.get("failed_gates") != []
         ):
-            errors.append("recommended requires every eligibility gate to pass")
+            errors.append("recommended bet must pass every eligibility gate")
         if isinstance(recommended_id, str) and recommended_id in records and recommended_id in bets:
             theory = records[recommended_id]["theory"]
             application = records[recommended_id]["application"]
@@ -310,6 +322,18 @@ def _validate_decision(
     return str(decision)
 
 
+def _current_binding(record: Mapping[str, Any]) -> dict[str, object] | None:
+    try:
+        return {
+            "bet_revision": record["bet"].get("revision"),
+            "bet_sha256": content_digest(record["bet_path"]),
+            "theory_evidence_sha256": content_digest(record["theory_path"]),
+            "application_evidence_sha256": content_digest(record["application_path"]),
+        }
+    except (KeyError, OSError):
+        return None
+
+
 def _validate_bindings(
     bindings: object, bet_ids: list[str], records: Mapping[str, Mapping[str, Any]], errors: list[str]
 ) -> None:
@@ -331,12 +355,10 @@ def _validate_bindings(
         if binding is None or record is None:
             errors.append(f"missing current binding for {bet_id}")
             continue
-        expected = {
-            "bet_revision": record["bet"].get("revision"),
-            "bet_sha256": content_digest(record["bet_path"]),
-            "theory_evidence_sha256": content_digest(record["theory_path"]),
-            "application_evidence_sha256": content_digest(record["application_path"]),
-        }
+        expected = _current_binding(record)
+        if expected is None:
+            errors.append(f"current artifacts for {bet_id} are unavailable")
+            continue
         if any(binding.get(field) != value for field, value in expected.items()):
             errors.append(f"binding for {bet_id} is stale")
 
@@ -352,14 +374,12 @@ def _validate_handoff(
     if record is None:
         errors.append("handoff bet is not a valid recommendation")
     else:
-        expected = {
-            "bet_id": bet_id,
-            "bet_revision": record["bet"].get("revision"),
-            "bet_sha256": content_digest(record["bet_path"]),
-            "theory_evidence_sha256": content_digest(record["theory_path"]),
-            "application_evidence_sha256": content_digest(record["application_path"]),
-        }
-        if any(payload.get(field) != value for field, value in expected.items()):
+        expected = _current_binding(record)
+        if expected is None:
+            errors.append("handoff bindings are unavailable")
+        elif payload.get("bet_id") != bet_id or any(
+            payload.get(field) != value for field, value in expected.items()
+        ):
             errors.append("handoff bindings are stale or inconsistent")
     if payload.get("next_vertical") not in NEXT_VERTICALS:
         errors.append("next_vertical is invalid")
@@ -478,12 +498,16 @@ def completion_issue(project_root: Path | str) -> str:
     errors = validate_package(project_root)
     if not errors:
         return ""
-    # Freshness is the terminal review boundary: a changed bet invalidates the
-    # decision even when the edit also made a lane's revision stale.
-    for error in errors:
-        if error.startswith("stale_decision:"):
-            return "research_discovery:stale_decision"
-    return f"research_discovery:{errors[0].split(':', 1)[0]}"
+    first_error = errors[0]
+    if "missing or invalid" in first_error:
+        return f"research_discovery:{first_error.split(':', 1)[0]}"
+    # A changed BET revision makes all older lane and decision bindings stale.
+    # Otherwise preserve the validator's structural-order finding.
+    if any("bet_revision does not match BET.json revision" in error for error in errors):
+        for error in errors:
+            if error.startswith("stale_decision:"):
+                return "research_discovery:stale_decision"
+    return f"research_discovery:{first_error.split(':', 1)[0]}"
 
 
 def main(argv: list[str] | None = None) -> int:
