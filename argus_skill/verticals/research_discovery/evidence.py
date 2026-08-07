@@ -39,9 +39,13 @@ ELIGIBILITY_GATES = frozenset(
         "fresh_review",
     }
 )
-PRE_PROBE_GATES = frozenset(
-    {"application_anchor", "theory_anchor", "bridge", "nearest_work"}
+PRE_PROBE_GATE_ORDER = (
+    "application_anchor",
+    "theory_anchor",
+    "bridge",
+    "nearest_work",
 )
+PRE_PROBE_GATES = frozenset(PRE_PROBE_GATE_ORDER)
 PROBE_GATES = frozenset({"theory_probe", "application_probe"})
 EVIDENCE_LEVELS = ("proxy", "retrospective", "real_setting", "production")
 _EVIDENCE_LEVEL_ORDER = {value: index for index, value in enumerate(EVIDENCE_LEVELS)}
@@ -172,6 +176,36 @@ def _mapping(value: object) -> dict[str, Any] | None:
     return dict(value) if isinstance(value, Mapping) else None
 
 
+def _pre_probe_gate_statuses(
+    bet: Mapping[str, Any], errors: list[str] | None = None
+) -> dict[str, str] | None:
+    findings = errors if errors is not None else []
+    gates = _mapping(bet.get("pre_probe_gates"))
+    if gates is None or set(gates) != PRE_PROBE_GATES:
+        findings.append("pre_probe_gates must contain exactly the four required gates")
+        return None
+    statuses: dict[str, str] = {}
+    for gate in PRE_PROBE_GATE_ORDER:
+        row = _mapping(gates.get(gate))
+        if row is None or row.get("status") not in {"pass", "fail"}:
+            findings.append(f"pre_probe_gates.{gate}.status must be pass or fail")
+            continue
+        if not _text(row.get("rationale")):
+            findings.append(f"pre_probe_gates.{gate}.rationale is empty")
+            continue
+        statuses[gate] = str(row["status"])
+    return statuses if len(statuses) == len(PRE_PROBE_GATE_ORDER) else None
+
+
+def _failed_pre_probe_gates(bet: Mapping[str, Any]) -> frozenset[str] | None:
+    statuses = _pre_probe_gate_statuses(bet)
+    if statuses is None:
+        return None
+    return frozenset(
+        gate for gate, status in statuses.items() if status == "fail"
+    )
+
+
 def _require_texts(
     payload: Mapping[str, Any], fields: tuple[str, ...], errors: list[str], prefix: str
 ) -> None:
@@ -270,6 +304,36 @@ def _validate_bet(payload: Mapping[str, Any], bet_id: str) -> list[str]:
         if novelty.get("status") not in {"distinct_on_searched_axis", "overlap", "unresolved"}:
             errors.append("novelty.status is invalid")
         _require_texts(novelty, ("search_date", "query_summary", "nearest_verified_work", "delta_axis", "dangerous_overlap"), errors, "novelty.")
+    gate_statuses = _pre_probe_gate_statuses(payload, errors)
+    if gate_statuses is not None:
+        bridge_gate = gate_statuses["bridge"]
+        bridge_status = bridge.get("status") if bridge is not None else None
+        if bridge_status == "supported" and bridge_gate != "pass":
+            errors.append(
+                "pre_probe_gates.bridge.status must pass when bridge.status is supported"
+            )
+        elif bridge_status in {"weak", "broken"} and bridge_gate != "fail":
+            errors.append(
+                "pre_probe_gates.bridge.status must fail when bridge.status is weak or broken"
+            )
+        elif bridge_status == "untested":
+            errors.append(
+                "pre_probe_gates.bridge cannot certify a terminal package when bridge.status is untested"
+            )
+
+        nearest_gate = gate_statuses["nearest_work"]
+        novelty_status = novelty.get("status") if novelty is not None else None
+        if (
+            novelty_status == "distinct_on_searched_axis"
+            and nearest_gate != "pass"
+        ):
+            errors.append(
+                "pre_probe_gates.nearest_work.status must pass when novelty.status is distinct_on_searched_axis"
+            )
+        elif novelty_status == "unresolved" and nearest_gate != "fail":
+            errors.append(
+                "pre_probe_gates.nearest_work.status must fail when novelty.status is unresolved"
+            )
     application = _require_map(payload, "application_test", errors, "")
     if application is not None:
         _require_texts(
@@ -510,11 +574,46 @@ def _validate_decision(
                     f"eligibility {bet_id} ineligible rows require a noneligible "
                     "decision_basis and failed_gates"
                 )
-            if basis == "pre_probe_gate" and not (set(gates) & PRE_PROBE_GATES):
-                errors.append(
-                    f"eligibility {bet_id} pre_probe_gate lacks a pre-probe failed gate"
-                )
+            current_bet = bets.get(bet_id)
+            current_failed = (
+                _failed_pre_probe_gates(current_bet)
+                if isinstance(current_bet, Mapping)
+                else None
+            )
+            gate_set = set(gates)
+            if basis == "eligible":
+                if current_failed is None:
+                    errors.append(
+                        f"eligibility {bet_id} eligible requires valid current Bet "
+                        "pre-probe gates"
+                    )
+                elif current_failed:
+                    errors.append(
+                        f"eligibility {bet_id} eligible requires all pre-probe gates to pass"
+                    )
+            elif basis == "pre_probe_gate":
+                if not gate_set or not gate_set <= PRE_PROBE_GATES:
+                    errors.append(
+                        f"eligibility {bet_id} pre_probe_gate cannot mix probe gates"
+                    )
+                elif current_failed is None or gate_set != set(current_failed):
+                    errors.append(
+                        f"eligibility {bet_id} failed_gates do not match the current Bet"
+                    )
             elif basis == "completed_probe":
+                if not gate_set or not gate_set <= PROBE_GATES:
+                    errors.append(
+                        f"eligibility {bet_id} completed_probe accepts only probe gates"
+                    )
+                if current_failed is None:
+                    errors.append(
+                        f"eligibility {bet_id} completed_probe requires valid current Bet "
+                        "pre-probe gates"
+                    )
+                elif current_failed:
+                    errors.append(
+                        f"eligibility {bet_id} completed_probe requires all pre-probe gates to pass"
+                    )
                 issue = _completed_probe_basis_issue(row, records.get(bet_id))
                 if issue:
                     errors.append(f"eligibility {bet_id} {issue}")

@@ -42,6 +42,27 @@ def _premise_sha(bet: dict, lane: str) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def valid_pre_probe_gates(*, failed: str | None = None) -> dict:
+    rationales = {
+        "application_anchor": "The real decision and baseline are concrete.",
+        "theory_anchor": "The binding theory premise is precise enough to probe.",
+        "bridge": "The supported bridge changes the application decision.",
+        "nearest_work": "The searched delta remains distinct on its stated axis.",
+    }
+    return {
+        gate: {
+            "status": "fail" if gate == failed else "pass",
+            "rationale": rationales[gate],
+        }
+        for gate in (
+            "application_anchor",
+            "theory_anchor",
+            "bridge",
+            "nearest_work",
+        )
+    }
+
+
 def valid_bet(*, candidate_state: str = "select") -> dict:
     return {
         "schema_version": 1,
@@ -84,6 +105,7 @@ def valid_bet(*, candidate_state: str = "select") -> dict:
             "delta_axis": "interval-derived triage threshold",
             "dangerous_overlap": "Confidence-score triage without the interval mechanism",
         },
+        "pre_probe_gates": valid_pre_probe_gates(),
         "application_test": {
             "binding_premise": "Interval-aware triage improves the stated metric.",
             "intervention": "Replace the fixed threshold with the interval-aware threshold.",
@@ -224,6 +246,9 @@ def _valid_project(root: Path, *, decision: str = "recommended") -> Path:
     theory_path = bet_path.with_name("THEORY_EVIDENCE.json")
     application_path = bet_path.with_name("APPLICATION_EVIDENCE.json")
     bet = valid_bet(candidate_state="select" if decision == "recommended" else "park")
+    if decision != "recommended":
+        bet["novelty"]["status"] = "overlap"
+        bet["pre_probe_gates"] = valid_pre_probe_gates(failed="nearest_work")
     _write_json(bet_path, bet)
     _write_json(theory_path, valid_theory_evidence(bet))
     _write_json(application_path, valid_application_evidence(bet))
@@ -274,6 +299,19 @@ def _refresh_bindings(root: Path) -> None:
         _write_json(handoff_path, handoff)
 
 
+def _refresh_premise_digests(root: Path) -> None:
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    for lane, filename in (
+        ("theory", "THEORY_EVIDENCE.json"),
+        ("application", "APPLICATION_EVIDENCE.json"),
+    ):
+        evidence_path = bet_path.with_name(filename)
+        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+        evidence["premise_sha256"] = _premise_sha(bet, lane)
+        _write_json(evidence_path, evidence)
+
+
 def _add_ineligible_killed_bet(root: Path) -> None:
     discovery = root / "research" / "discovery"
     bet_path = discovery / "bets" / "B2" / "BET.json"
@@ -281,6 +319,8 @@ def _add_ineligible_killed_bet(root: Path) -> None:
     application_path = bet_path.with_name("APPLICATION_EVIDENCE.json")
     bet = valid_bet(candidate_state="kill")
     bet.update(id="B2", title="Rejected alternative")
+    bet["novelty"]["status"] = "overlap"
+    bet["pre_probe_gates"] = valid_pre_probe_gates(failed="nearest_work")
     theory = valid_theory_evidence(bet)
     theory.update(
         bet_id="B2",
@@ -356,6 +396,209 @@ def test_valid_pre_probe_gate_can_ground_no_bet(tmp_path: Path) -> None:
         }
     ]
     assert validate_package(root) == []
+
+
+def test_pre_probe_basis_cannot_mix_probe_gate_to_hide_blocked_lane(
+    tmp_path: Path,
+) -> None:
+    root = _valid_project(tmp_path, decision="no_bet")
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["novelty"]["status"] = "overlap"
+    bet["pre_probe_gates"] = valid_pre_probe_gates(failed="nearest_work")
+    _write_json(bet_path, bet)
+
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"][0].update(
+        decision_basis="pre_probe_gate",
+        failed_gates=["nearest_work", "theory_probe"],
+    )
+    _write_json(decision_path, decision)
+
+    theory_path = bet_path.with_name("THEORY_EVIDENCE.json")
+    theory = json.loads(theory_path.read_text(encoding="utf-8"))
+    theory.update(
+        execution_status="blocked",
+        failure_class="dependency",
+        idea_status="untested",
+    )
+    _write_json(theory_path, theory)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_decision:") and "cannot mix" in error
+        for error in validate_package(root)
+    )
+
+
+def test_pre_probe_failed_gates_must_equal_current_bet_failures(
+    tmp_path: Path,
+) -> None:
+    root = _valid_project(tmp_path, decision="no_bet")
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["novelty"]["status"] = "overlap"
+    bet["pre_probe_gates"] = valid_pre_probe_gates(failed="nearest_work")
+    _write_json(bet_path, bet)
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"][0]["failed_gates"] = ["bridge"]
+    _write_json(decision_path, decision)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_decision:") and "current Bet" in error
+        for error in validate_package(root)
+    )
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra"])
+def test_pre_probe_gates_require_exact_four_keys(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    root = _valid_project(tmp_path)
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    if mutation == "missing":
+        bet["pre_probe_gates"].pop("nearest_work")
+    else:
+        bet["pre_probe_gates"]["theory_probe"] = {
+            "status": "pass",
+            "rationale": "The theory probe completed.",
+        }
+    _write_json(bet_path, bet)
+    _refresh_bindings(root)
+
+    errors = validate_package(root)
+    assert any(
+        error.startswith("invalid_bet:B1:") and "exactly" in error
+        for error in errors
+    )
+    assert any(
+        error.startswith("invalid_decision:") and "pre-probe gates" in error
+        for error in errors
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error_fragment"),
+    [
+        ({"nearest_work": {"status": "fail", "rationale": "Distinct work."}}, "nearest_work"),
+        ({"bridge": {"status": "fail", "rationale": "Bridge failed."}}, "bridge"),
+        ({"application_anchor": {"status": "maybe", "rationale": "Unknown."}}, "status"),
+        ({"theory_anchor": {"status": "pass", "rationale": "REPLACE"}}, "rationale"),
+    ],
+)
+def test_pre_probe_gate_rows_are_current_and_well_formed(
+    tmp_path: Path,
+    mutation: dict,
+    error_fragment: str,
+) -> None:
+    root = _valid_project(tmp_path)
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["pre_probe_gates"] = valid_pre_probe_gates()
+    bet["pre_probe_gates"].update(mutation)
+    _write_json(bet_path, bet)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_bet:B1:") and error_fragment in error
+        for error in validate_package(root)
+    )
+
+
+@pytest.mark.parametrize(
+    ("bridge_status", "gate_status"),
+    [
+        ("supported", "fail"),
+        ("weak", "pass"),
+        ("broken", "pass"),
+        ("untested", "pass"),
+        ("untested", "fail"),
+    ],
+)
+def test_bridge_gate_result_matches_current_structured_bridge(
+    tmp_path: Path,
+    bridge_status: str,
+    gate_status: str,
+) -> None:
+    root = _valid_project(tmp_path)
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["bridge"]["status"] = bridge_status
+    bet["pre_probe_gates"]["bridge"]["status"] = gate_status
+    _write_json(bet_path, bet)
+    _refresh_premise_digests(root)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_bet:B1:") and "pre_probe_gates.bridge" in error
+        for error in validate_package(root)
+    )
+
+
+def test_distinct_nearest_work_requires_passing_pre_probe_gate(
+    tmp_path: Path,
+) -> None:
+    root = _valid_project(tmp_path)
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["pre_probe_gates"] = valid_pre_probe_gates(failed="nearest_work")
+    _write_json(bet_path, bet)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_bet:B1:") and "nearest_work" in error
+        for error in validate_package(root)
+    )
+
+
+def test_unresolved_nearest_work_requires_failing_pre_probe_gate(
+    tmp_path: Path,
+) -> None:
+    root = _valid_project(tmp_path)
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["novelty"]["status"] = "unresolved"
+    bet["pre_probe_gates"] = valid_pre_probe_gates()
+    _write_json(bet_path, bet)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_bet:B1:") and "nearest_work" in error
+        for error in validate_package(root)
+    )
+
+
+@pytest.mark.parametrize("decision", ["recommended", "no_bet"])
+def test_eligible_or_completed_probe_requires_all_pre_probe_gates_to_pass(
+    tmp_path: Path,
+    decision: str,
+) -> None:
+    root = _valid_project(tmp_path, decision=decision)
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["bridge"]["status"] = "broken"
+    bet["pre_probe_gates"] = valid_pre_probe_gates(failed="bridge")
+    _write_json(bet_path, bet)
+    decision_path = root / "research/discovery/DECISION.json"
+    payload = json.loads(decision_path.read_text(encoding="utf-8"))
+    if decision == "no_bet":
+        payload["eligibility"][0].update(
+            decision_basis="completed_probe",
+            failed_gates=["theory_probe"],
+        )
+    _write_json(decision_path, payload)
+    _refresh_premise_digests(root)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_decision:") and "pre-probe gates" in error
+        for error in validate_package(root)
+    )
 
 
 def test_grounded_empty_portfolio_can_record_no_bet(tmp_path: Path) -> None:
@@ -455,6 +698,8 @@ def _make_completed_theory_refutation(root: Path) -> None:
     bet_path = root / "research/discovery/bets/B1/BET.json"
     bet = json.loads(bet_path.read_text(encoding="utf-8"))
     bet["candidate_state"] = "kill"
+    bet["novelty"]["status"] = "distinct_on_searched_axis"
+    bet["pre_probe_gates"] = valid_pre_probe_gates()
     _write_json(bet_path, bet)
     theory_path = bet_path.with_name("THEORY_EVIDENCE.json")
     theory = json.loads(theory_path.read_text(encoding="utf-8"))
@@ -481,6 +726,24 @@ def test_completed_scientific_refutation_can_ground_no_bet(tmp_path: Path) -> No
     root = _valid_project(tmp_path, decision="no_bet")
     _make_completed_theory_refutation(root)
     assert validate_package(root) == []
+
+
+def test_completed_probe_basis_cannot_mix_pre_probe_gate(tmp_path: Path) -> None:
+    root = _valid_project(tmp_path, decision="no_bet")
+    _make_completed_theory_refutation(root)
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"][0]["failed_gates"] = [
+        "theory_probe",
+        "nearest_work",
+    ]
+    _write_json(decision_path, decision)
+
+    assert any(
+        error.startswith("invalid_decision:")
+        and "accepts only probe gates" in error
+        for error in validate_package(root)
+    )
 
 
 def test_budget_limited_completed_refutation_can_ground_no_bet(tmp_path: Path) -> None:

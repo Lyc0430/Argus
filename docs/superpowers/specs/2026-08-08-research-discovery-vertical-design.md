@@ -254,6 +254,7 @@ Required top-level fields:
 - `theory_anchor`;
 - `bridge`;
 - `novelty`;
+- `pre_probe_gates`;
 - `application_test`;
 - `kill_criteria`, `limitations`, `estimated_cost`, and `next_uncertainty`.
 
@@ -301,6 +302,29 @@ claim to `proved` or `verified` without the appropriate downstream evidence.
 `overlap` is a reframe or selection signal, not empirical refutation. It may
 still leave a new application context, boundary, integration, or decision
 contribution, but that delta must be restated before selection.
+
+`pre_probe_gates` is the current Bet's exact four-row eligibility assessment:
+
+```json
+{
+  "pre_probe_gates": {
+    "application_anchor": {"status": "pass | fail", "rationale": "..."},
+    "theory_anchor": {"status": "pass | fail", "rationale": "..."},
+    "bridge": {"status": "pass | fail", "rationale": "..."},
+    "nearest_work": {"status": "pass | fail", "rationale": "..."}
+  }
+}
+```
+
+The four keys are exact and every row has a non-placeholder rationale.
+`pre_probe_gates.bridge.status=pass` if and only if
+`bridge.status=supported`; it is `fail` for `bridge.status=weak | broken`, and
+an `untested` bridge cannot certify a terminal package.
+`novelty.status=distinct_on_searched_axis` requires the nearest-work gate to
+pass, while `novelty.status=unresolved` requires it to fail. Reviewed
+`overlap` may pass or fail depending on whether the current explicit
+`delta_axis` survives. Because these rows live inside `BET.json`, the existing
+Bet digest binds them to the decision.
 
 `application_test` requires:
 
@@ -393,12 +417,28 @@ only these stable identifiers: `application_anchor`, `theory_anchor`, `bridge`,
 `nearest_work`, `theory_probe`, `application_probe`, `evidence_separation`,
 `safety_authority`, and `fresh_review`; it never contains prose.
 
+The decision bases have mutually exclusive gate shapes:
+
+- `eligible` has no failed gates and requires all four current Bet pre-probe
+  gates to pass;
+- `pre_probe_gate` contains only the four pre-probe identifiers and equals
+  exactly the current Bet rows whose status is `fail`;
+- `completed_probe` contains only `theory_probe | application_probe`, requires
+  all four current Bet pre-probe gates to pass, and retains the dual-lane
+  scientific grounding rules below; and
+- `blocked_probe` is reserved for a nonterminal `paused` decision grounded by
+  a required lane that did not validly complete.
+
+A row never mixes pre-probe and probe identifiers. A missing or malformed
+current Bet gate map cannot ground any decision basis.
+
 For `recommended`:
 
 - `recommended_bet_id` names exactly one portfolio member;
 - the selected eligibility row has `eligible=true`,
   `decision_basis=eligible`, and no failed gates;
 - every eligibility gate passes;
+- all four current Bet pre-probe gates pass;
 - both lane probes completed validly and support the current candidate premise;
   a refuted or inconclusive binding premise requires revision, parking, or
   rejection before recommendation;
@@ -412,10 +452,10 @@ For `no_bet`:
 - `recommended_bet_id` is null;
 - every referenced candidate is `eligible=false`, is `park` or `kill`, and has
   nonempty stable failed gates;
-- each row uses `pre_probe_gate`, grounded by `application_anchor`,
-  `theory_anchor`, `bridge`, or `nearest_work`, or `completed_probe`, grounded by
-  a scientifically negative or inconclusive theory/application probe after
-  both required lanes completed coherently;
+- each `pre_probe_gate` row copies the exact failed set from the current Bet,
+  or a `completed_probe` row is grounded by a scientifically negative or
+  inconclusive theory/application probe after both required lanes completed
+  coherently and every pre-probe gate passed;
 - no infrastructure or access failure is presented as a scientific rejection;
 - the result may be budget-limited only when the completed search and probes
   support a genuine bounded decision. If a faithful finalist probe never ran,
