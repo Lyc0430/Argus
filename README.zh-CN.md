@@ -197,6 +197,15 @@ Argus 的设计目标不是“只能配置”，而是“可以被你改变”�
 
 Vertical 可以为你的领域提供专属阶段、Skill、数据集、工具、证据要求、评测方法与完成标准。规划与审查将遵循该领域真正重要的规范，而不是一套通用流程。
 
+#### 内置 Research Discovery
+
+`research_discovery` 面向研究方向的早期探索，其中理论机制和真实应用问题
+必须同样重要。它依次经历 `frame → discover → probe → decide`，最后产出一个
+经排序的研究组合，以及一份受证据约束的 Research Bet，或一个有依据的
+`no_bet` 结果。完成并不意味着定理已被证明、应用已在生产环境中可用，或论文
+已经就绪；可选的交接只会命名下一项有边界的 `math`、`research` 或 `software`
+任务。
+
 ### 让其他 Agent 成为外层入口
 
 你可以通过 GitHub Copilot、Pi、Codex、Claude Code、OpenCode、OpenClaw 或 Hermes 调用 Argus、检查状态、操作本地 CLI 或 Web/API，并继续迭代自己的部署。
