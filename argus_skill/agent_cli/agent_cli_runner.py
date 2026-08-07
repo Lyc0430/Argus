@@ -53,6 +53,10 @@ ExternalInterruptProvider = Callable[[], str | None]
 @dataclass
 class RunnerOptions:
     model: str | None = None
+    # Claude CLI only. Aliases are validated separately, then encoded as the
+    # comma-separated ordered chain accepted by --fallback-model.
+    # None applies the local Fable -> Opus reliability policy; [] disables it.
+    fallback_models: list[str] | None = None
     reasoning_effort: str | None = None
     dangerous_yolo: bool = False
     full_auto: bool = False

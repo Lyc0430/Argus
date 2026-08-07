@@ -101,6 +101,7 @@ dev = [
 [project.scripts]
 argus = "argus_skill.apps.tui_launcher:main"
 argus-skill = "argus_skill.__main__:main"
+argus-compute = "argus_skill.compute.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/lbx154/Argus"

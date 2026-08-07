@@ -48,6 +48,7 @@ class RunnerOptions:
     """Per-call options for an LLM runner backend."""
 
     model: str | None = None
+    fallback_models: list[str] | None = None
     reasoning_effort: str | None = None
     working_dir: str | None = None
     add_dirs: list[str] | None = None

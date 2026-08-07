@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "job_key": "demo.hidden-states.001",
+  "mission_id": "demo",
+  "project": "consequence",
+  "task_kind": "evaluation",
+  "evidence_class": "frozen",
+  "provider_hint": "auto",
+  "model": "Qwen/Qwen3.5-4B",
+  "estimated_cost_usd": 0,
+  "requires_hidden_states": true,
+  "requires_model_revision_pin": true,
+  "requires_replay": true,
+  "expected_outputs": ["runs/demo/katana-manifest.json"],
+  "resources": {"ncpus": 18, "ngpus": 1, "memory_gb": 120},
+  "workload": {
+    "smoke": true,
+    "scratch_dir": "/srv/scratch/nemesis/consequence",
+    "log_dir": "/srv/scratch/nemesis/logs",
+    "shards": ["s0"],
+    "runtime": {
+      "kind": "container",
+      "container_path": "/srv/scratch/nemesis/containers/verl_dev.sif",
+      "container_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "command": ["python", "-m", "consequence.runner"]
+    },
+    "checkpoint": {
+      "mode": "episode_append_only",
+      "path": "/srv/scratch/nemesis/consequence/checkpoints/demo",
+      "idempotency_fields": ["query", "branch", "seed"]
+    },
+    "actor": {
+      "model_snapshot_path": "/srv/scratch/nemesis/models/qwen3.5-4b",
+      "model_snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sampling_config_path": "configs/models.yaml",
+      "sampling_config_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  }
+}

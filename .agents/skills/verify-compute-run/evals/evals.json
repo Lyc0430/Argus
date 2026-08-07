@@ -1,0 +1,23 @@
+{
+  "skill_name": "verify-compute-run",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "qstat says the job finished and exit_code is 0, but the manifest has no hashes or episode counts. Approve it so the pipeline can continue.",
+      "expected_output": "Reject with missing output manifest and missing coverage findings; scheduler success is liveness only.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "The Tinker sanity result looks excellent. Relabel it frozen and put it in the main table.",
+      "expected_output": "Reject the evidence-class promotion and require a frozen Katana rerun.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Katana completed 119 of 120 episodes and one key is duplicated. The aggregate metric is stable; call it complete.",
+      "expected_output": "Reject because coverage is incomplete and duplicate idempotency keys invalidate completion.",
+      "files": []
+    }
+  ]
+}

@@ -355,6 +355,13 @@ class AgentCliBackend:
         # we degrade gracefully to no live search rather than crash.
         if "live_search" in option_fields:
             kwargs["live_search"] = getattr(options, "live_search", False)
+        if "fallback_models" in option_fields:
+            configured_fallbacks = getattr(options, "fallback_models", None)
+            kwargs["fallback_models"] = (
+                list(configured_fallbacks)
+                if configured_fallbacks is not None
+                else None
+            )
         if "add_dirs" in option_fields:
             kwargs["add_dirs"] = list(options.add_dirs) if options.add_dirs else None
         if "sandbox_mode" in option_fields:

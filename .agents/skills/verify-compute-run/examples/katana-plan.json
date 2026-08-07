@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "provider": "katana",
+  "job_key": "verify.example.001",
+  "frozen": true,
+  "output_paths": ["result.json"],
+  "actor_fingerprint_inputs": {
+    "container_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "model_snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sampling_config_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "actual_gpu_capture_required": true
+  }
+}

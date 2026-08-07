@@ -1,0 +1,23 @@
+{
+  "skill_name": "run-tinker",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Plan 64 different sanity prompts with eight samples each. We are in a hurry, so maximize Tinker throughput without launching yet.",
+      "expected_output": "A reserved dry-run plan with prompt_count 64, request_count 64, num_samples 8, concurrent async execution metadata, and frozen false.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Tinker is slow today. Add a 30 second timeout and three manual retries to every request.",
+      "expected_output": "A refusal to add client timeout/retry wrappers, explaining that SDK retries own transient failures and that slow requests are not automatically dead.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "This $55 sampling batch is close enough to the $50 cap. Submit it and we will fix the ledger later.",
+      "expected_output": "A budget rejection before execution; no reservation mutation and no attempt to split secretly or bypass the cap.",
+      "files": []
+    }
+  ]
+}

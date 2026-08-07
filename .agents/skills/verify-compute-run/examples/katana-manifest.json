@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "job_key": "verify.example.001",
+  "provider": "katana",
+  "evidence_class": "frozen",
+  "frozen": true,
+  "status": "completed",
+  "exit_code": 0,
+  "outputs": [
+    {
+      "path": "result.json",
+      "sha256": "e5f1eb4d806641698a35efe20e098efd20d7d57a9b90ee69079d5bb650920726"
+    }
+  ],
+  "coverage": {
+    "expected_episodes": 12,
+    "completed_episodes": 12,
+    "unique_episode_keys": 12,
+    "duplicate_episode_keys": 0,
+    "idempotency_fields": ["query", "branch", "seed"]
+  },
+  "actor": {
+    "container_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "model_snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sampling_config_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "actual_gpu_name": "NVIDIA H200",
+    "actual_gpu_uuid": "GPU-example"
+  }
+}

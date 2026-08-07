@@ -1,0 +1,23 @@
+{
+  "skill_name": "route-compute",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have 800 prompts and need four exploratory Qwen samples per prompt today. Route the job and produce the standard request; do not launch it.",
+      "expected_output": "A Tinker-eligible exploratory ComputeRequest with a positive cost estimate, prompt_count 800, num_samples 4, and no frozen claim.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Use the fastest provider for the paper main table, but the evaluator needs hidden states and exact replay across seeds.",
+      "expected_output": "A frozen Katana ComputeRequest with main-table, hidden-state, revision/replay requirements explicit; speed does not override routing.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "The request says provider_hint=tinker, but it trains the critic with CRN. Keep my hint and make it work.",
+      "expected_output": "A refusal to weaken the evidence boundary and a corrected Katana request or a routing error naming critic training and CRN.",
+      "files": []
+    }
+  ]
+}
