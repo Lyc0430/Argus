@@ -800,6 +800,102 @@ def test_blocked_probe_requires_every_named_probe_to_be_grounded(
     )
 
 
+@pytest.mark.parametrize(
+    ("untested_lane", "refuted_lane", "refuting_failure"),
+    [
+        ("theory", "application", "empirical"),
+        ("application", "theory", "theoretical"),
+    ],
+)
+def test_completed_probe_rejects_untested_required_lane(
+    tmp_path: Path,
+    untested_lane: str,
+    refuted_lane: str,
+    refuting_failure: str,
+) -> None:
+    root = _valid_project(tmp_path, decision="no_bet")
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["novelty"]["status"] = "distinct_on_searched_axis"
+    bet["pre_probe_gates"] = valid_pre_probe_gates()
+    _write_json(bet_path, bet)
+
+    evidence_paths = {
+        "theory": bet_path.with_name("THEORY_EVIDENCE.json"),
+        "application": bet_path.with_name("APPLICATION_EVIDENCE.json"),
+    }
+    untested_path = evidence_paths[untested_lane]
+    untested = json.loads(untested_path.read_text(encoding="utf-8"))
+    untested.update(
+        execution_status="completed",
+        failure_class="none",
+        idea_status="untested",
+    )
+    _write_json(untested_path, untested)
+    refuted_path = evidence_paths[refuted_lane]
+    refuted = json.loads(refuted_path.read_text(encoding="utf-8"))
+    refuted.update(
+        execution_status="completed",
+        failure_class=refuting_failure,
+        idea_status="refuted",
+        summary="The faithful completed probe refuted its binding premise.",
+        evidence="The preregistered falsifier was observed in the recorded artifact.",
+    )
+    _write_json(refuted_path, refuted)
+
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"][0].update(
+        decision_basis="completed_probe",
+        failed_gates=[f"{refuted_lane}_probe"],
+    )
+    _write_json(decision_path, decision)
+    _refresh_bindings(root)
+
+    errors = validate_package(root)
+    assert not any(
+        error.startswith(("invalid_theory_evidence:", "invalid_application_evidence:"))
+        for error in errors
+    )
+    assert any(
+        error.startswith("invalid_decision:")
+        and "completed_probe requires both faithful lanes" in error
+        and "paused" in error
+        for error in errors
+    )
+
+
+@pytest.mark.parametrize("lane", ["theory", "application"])
+def test_completed_none_untested_lane_is_grounded_by_paused_blocked_probe(
+    tmp_path: Path,
+    lane: str,
+) -> None:
+    root = _valid_project(tmp_path, decision="paused")
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"][0].update(
+        decision_basis="blocked_probe",
+        failed_gates=[f"{lane}_probe"],
+    )
+    _write_json(decision_path, decision)
+    filename = (
+        "THEORY_EVIDENCE.json" if lane == "theory" else "APPLICATION_EVIDENCE.json"
+    )
+    evidence_path = root / "research/discovery/bets/B1" / filename
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    evidence.update(
+        execution_status="completed",
+        failure_class="none",
+        idea_status="untested",
+    )
+    _write_json(evidence_path, evidence)
+    _refresh_bindings(root)
+
+    errors = validate_package(root)
+    assert not any(error.startswith("invalid_decision:") for error in errors)
+    assert errors == ["terminal_paused:paused discovery decisions are non-terminal"]
+
+
 def _make_completed_theory_refutation(root: Path) -> None:
     bet_path = root / "research/discovery/bets/B1/BET.json"
     bet = json.loads(bet_path.read_text(encoding="utf-8"))

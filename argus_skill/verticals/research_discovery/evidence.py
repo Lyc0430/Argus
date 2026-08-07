@@ -465,6 +465,7 @@ def _completed_probe_basis_issue(
             lane_record.get("execution_status") != "completed"
             or failure in contract.non_idea_failures
             or failure in contract.advisory_failures
+            or lane_record.get("idea_status") == "untested"
             or not valid
         ):
             return (
@@ -513,6 +514,7 @@ def _blocked_probe_basis_is_grounded(
             lane_record.get("execution_status") != "completed"
             or failure in contract.non_idea_failures
             or failure in contract.advisory_failures
+            or lane_record.get("idea_status") == "untested"
             or not valid
         ):
             continue
