@@ -24,6 +24,7 @@ from argus_skill.skills.builtins import (
     retire_orphaned_builtin_seeds,
     seed_builtin_skills_for_vertical,
     seed_vertical_skills,
+    vertical_skill_overrides,
     vertical_skill_source_path,
 )
 
@@ -100,11 +101,18 @@ def test_vertical_owned_skills_are_not_also_flat_builtins() -> None:
     from argus_skill.skills.vertical_select import VERTICALS
 
     flat = {name for name, _text in iter_builtin_skill_texts()}
-    leaked = {
-        vertical: sorted({name for name, _t in iter_vertical_skill_texts(vertical)} & flat)
-        for vertical in VERTICALS
-    }
-    assert {v: names for v, names in leaked.items() if names} == {}
+    for vertical in VERTICALS:
+        vertical_names = {name for name, _ in iter_vertical_skill_texts(vertical)}
+        assert vertical_names & flat == vertical_skill_overrides(vertical)
+
+
+def test_research_discovery_seed_uses_vertical_idea_creator(tmp_path) -> None:
+    seed_builtin_skills_for_vertical(tmp_path, "research_discovery", overwrite=True)
+
+    body = (tmp_path / "engineer" / "idea-creator.md").read_text(encoding="utf-8")
+    assert "zero or one" in body
+    assert "rank_score" not in body
+    assert "write `EXPERIMENT_PLAN.md`" not in body
 
 
 def test_retired_builtin_skills_are_not_packaged() -> None:

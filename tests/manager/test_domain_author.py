@@ -107,6 +107,19 @@ def test_vertical_prompt_composes_chemistry_with_research() -> None:
     assert "JSON" not in prompt
 
 
+def test_vertical_prompt_distinguishes_research_discovery_neighbors() -> None:
+    prompt = build_vertical_decision_prompt(
+        "Find research ideas that connect a theoretical mechanism to an application problem",
+        verticals_with_purpose=VERTICAL_PURPOSES,
+        domains_with_purpose=DOMAIN_PURPOSES,
+    )
+    assert "research_discovery" in prompt
+    assert "finding and screening theory-application research directions" in prompt
+    assert "Use math" in prompt
+    assert "Use research" in prompt
+    assert "Use software" in prompt
+
+
 def test_vertical_prompt_does_not_escalate_bounded_repo_fix_to_new_domain() -> None:
     prompt = build_vertical_decision_prompt(
         "Repair one failing test in the current repository and return the patch.",
@@ -187,6 +200,40 @@ def test_vertical_parser_rejects_domain_on_non_research_workflow() -> None:
     )
 
     assert decision is None
+
+
+def test_parser_rejects_domain_on_research_discovery() -> None:
+    decision = parse_vertical_decision(
+        json.dumps({
+            "choice": "existing",
+            "vertical": "research_discovery",
+            "domain": "chemistry",
+            "workflow_mode": "staged",
+            "execution_task": "find a chemistry research bet",
+        }),
+        known_verticals=VERTICALS,
+        known_domains=BUILTIN_DOMAINS,
+        default_execution_task="find a chemistry research bet",
+    )
+    assert decision is None
+
+
+def test_research_discovery_routing_prompts_state_software_boundary_once() -> None:
+    builders = (
+        build_fast_vertical_decision_prompt,
+        build_vertical_decision_prompt,
+    )
+    boundary = (
+        "software when the method is already selected and the requested outcome "
+        "is repository implementation"
+    )
+    for builder in builders:
+        prompt = builder(
+            "Find a theory-application research direction.",
+            verticals_with_purpose=VERTICAL_PURPOSES,
+        )
+        assert prompt.count(boundary) == 1
+        assert "Use software for that selected-method" not in prompt
 
 
 def test_fast_vertical_parser_sends_new_or_uncertain_work_to_grounding() -> None:

@@ -41,6 +41,21 @@ _VERTICAL_SKILL_INHERITANCE = {
     "nanochat": ("speedrun",),
     "nanogpt_speedrun": ("speedrun",),
 }
+
+_VERTICAL_SKILL_OVERRIDES = {
+    "research_discovery": frozenset({
+        "engineer/idea-discovery.md",
+        "engineer/idea-creator.md",
+        "engineer/novelty-check.md",
+    }),
+}
+
+
+def vertical_skill_overrides(vertical: str) -> frozenset[str]:
+    """Return intentional same-path common Skill replacements for a Vertical."""
+    return _VERTICAL_SKILL_OVERRIDES.get(vertical, frozenset())
+
+
 def builtin_skill_source_path() -> Path:
     """Return the filesystem path for bundled skill markdown when available."""
     return Path(__file__).resolve().parents[1] / "builtin_skills"

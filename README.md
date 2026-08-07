@@ -211,6 +211,16 @@ If you are an agent enthusiast, deploy Argus locally and make the complete loop 
 
 A Vertical gives your field its own stages, Skills, datasets, tools, evidence expectations, evaluation methods, and completion criteria. Planning and review can then follow the real standards of your domain instead of a generic process.
 
+#### Built-in Research Discovery
+
+`research_discovery` is for early research-direction search where a theoretical
+mechanism and a real application problem must both matter. It progresses through
+`frame → discover → probe → decide` and finishes with a ranked portfolio plus
+either one evidence-bound Research Bet or a grounded `no_bet` result. Completion
+does not mean the theorem is proved, the application works in production, or a
+paper is ready; the optional handoff names the next bounded `math`, `research`,
+or `software` task.
+
 ### Use another agent as the outer layer
 
 GitHub Copilot, Pi, Codex, Claude Code, OpenCode, OpenClaw, or Hermes can be the environment from which you invoke Argus, inspect its state, operate its local CLI or Web/API surface, and continue improving the deployment.
