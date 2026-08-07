@@ -129,6 +129,17 @@ def test_bounded_done_does_not_auto_complete_final_stage() -> None:
     assert decision is None
 
 
+def test_vertical_completion_blocker_prevents_final_complete() -> None:
+    decision = final_stage_completion_decision(
+        _review(),
+        current_stage="decide",
+        stage_order=("frame", "discover", "probe", "decide"),
+        vertical="research_discovery",
+        completion_blocker="research_discovery:invalid_decision",
+    )
+    assert decision is None
+
+
 def test_no_second_machine_value_guard_overrides_manager() -> None:
     """The Manager's parsed decision is what reaches disk.
 

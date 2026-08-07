@@ -220,6 +220,25 @@ def vertical_completion_gate(mod: VerticalDefinition) -> str:
     return "full_paper"
 
 
+def vertical_completion_issue(
+    mod: VerticalDefinition,
+    project_root: object,
+) -> str:
+    """Return an optional Vertical completion issue, failing closed on errors."""
+    fn = getattr(mod, "completion_issue", None)
+    if not callable(fn):
+        return ""
+    try:
+        result = fn(project_root)
+    except Exception as exc:  # noqa: BLE001 — completion must fail closed
+        return f"vertical completion check unavailable: {type(exc).__name__}"
+    return (
+        result.strip()
+        if isinstance(result, str)
+        else "vertical completion check returned invalid result"
+    )
+
+
 def vertical_completion_contract_version(mod: VerticalDefinition) -> int:
     """Return the optional versioned final-stage completion contract."""
     raw = getattr(mod, "COMPLETION_CONTRACT_VERSION", 0)
@@ -278,6 +297,7 @@ __all__ = [
     "vertical_requires_independent_review",
     "vertical_completion_contract_version",
     "vertical_completion_gate",
+    "vertical_completion_issue",
     "vertical_research_target_levels",
     "vertical_workflow_mode",
     "vertical_search_altitude",

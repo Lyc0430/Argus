@@ -506,11 +506,15 @@ def complete_final_stage(
 
     try:
         vertical = resolve_vertical(project_root)
-        completion_contract_version = vertical_completion_contract_version(
-            load_vertical(vertical, project_root=project_root)
-        )
+        module = load_vertical(vertical, project_root=project_root)
+        completion_contract_version = vertical_completion_contract_version(module)
     except Exception as exc:  # noqa: BLE001 — completion authority fails closed
         raise ValueError("completion contract unavailable") from exc
+    from ..core.completion_gate import project_completion_issue
+
+    issue = project_completion_issue(project_root)
+    if issue:
+        raise ValueError(issue)
     completion_contract_sha256 = ""
     if completion_contract_version > 0:
         try:
