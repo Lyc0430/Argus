@@ -623,12 +623,15 @@ def vertical_has_current_completion_certificate(
             load_vertical,
             vertical_checklist_stage_order,
             vertical_completion_contract_version,
+            vertical_completion_issue,
         )
 
         module = load_vertical(vertical, project_root=project_root)
         order = vertical_checklist_stage_order(module)
         completion_contract_version = vertical_completion_contract_version(module)
     except Exception:  # noqa: BLE001 — strict completion fails closed
+        return False
+    if vertical_completion_issue(module, project_root):
         return False
     if completion_contract_version <= 0:
         return True

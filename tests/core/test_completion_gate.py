@@ -7,8 +7,13 @@ import pytest
 
 from argus_skill.core.completion_gate import project_completion_issue
 from argus_skill.skills.stage_machine import complete_final_stage
-from argus_skill.skills.vertical_select import persist_vertical
+from argus_skill.skills.vertical_select import (
+    persist_vertical,
+    resolve_vertical,
+    vertical_has_current_completion_certificate,
+)
 from argus_skill.verticals._base import vertical_completion_issue
+from tests.skills.test_research_discovery_evidence import _valid_project
 
 
 def test_missing_vertical_completion_hook_is_satisfied(tmp_path) -> None:
@@ -82,3 +87,45 @@ def test_invalid_discovery_package_cannot_complete_final_stage(tmp_path) -> None
 
     persisted = json.loads(state_path.read_text(encoding="utf-8"))
     assert persisted["stages"]["decide"]["status"] != "done"
+
+
+def test_discovery_completion_certificate_revalidates_current_package(
+    tmp_path,
+) -> None:
+    root = _valid_project(tmp_path)
+    persist_vertical(root, "research_discovery")
+    state_path = root / "research/PIPELINE_STATE.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["current_stage"] = "decide"
+    state["stages"] = {"decide": {"status": "in_progress"}}
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    paths_before_completion = {
+        path.relative_to(root) for path in root.rglob("*")
+    }
+
+    complete_final_stage(root, reason="reviewer certified current decision package")
+
+    assert vertical_has_current_completion_certificate(
+        root, "research_discovery"
+    ) is True
+    assert resolve_vertical(root) == "research_discovery"
+    persisted = json.loads(state_path.read_text(encoding="utf-8"))
+    assert persisted.get("domain") is None
+    assert persisted["vertical"] == "research_discovery"
+    assert {path.relative_to(root) for path in root.rglob("*")} == paths_before_completion
+
+    evidence_path = (
+        root / "research/discovery/bets/B1/APPLICATION_EVIDENCE.json"
+    )
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    evidence["summary"] = "Post-certification mutation makes the decision stale."
+    evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+
+    assert vertical_has_current_completion_certificate(
+        root, "research_discovery"
+    ) is False
+    assert project_completion_issue(root) == "research_discovery:stale_decision"
+    assert resolve_vertical(root) == "research_discovery"
+    persisted = json.loads(state_path.read_text(encoding="utf-8"))
+    assert persisted.get("domain") is None
+    assert persisted["vertical"] == "research_discovery"

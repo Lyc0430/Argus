@@ -218,6 +218,24 @@ def test_parser_rejects_domain_on_research_discovery() -> None:
     assert decision is None
 
 
+def test_research_discovery_routing_prompts_state_software_boundary_once() -> None:
+    builders = (
+        build_fast_vertical_decision_prompt,
+        build_vertical_decision_prompt,
+    )
+    boundary = (
+        "software when the method is already selected and the requested outcome "
+        "is repository implementation"
+    )
+    for builder in builders:
+        prompt = builder(
+            "Find a theory-application research direction.",
+            verticals_with_purpose=VERTICAL_PURPOSES,
+        )
+        assert prompt.count(boundary) == 1
+        assert "Use software for that selected-method" not in prompt
+
+
 def test_fast_vertical_parser_sends_new_or_uncertain_work_to_grounding() -> None:
     route = parse_fast_vertical_decision(
         json.dumps({

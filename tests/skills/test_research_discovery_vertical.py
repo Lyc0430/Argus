@@ -55,6 +55,23 @@ def test_research_discovery_final_protected_floor_is_exact() -> None:
     assert module.PROTECTED_ITEM_IDS <= declared
 
 
+def test_research_discovery_checklists_route_reviewers_to_canonical_lane_files() -> None:
+    module = load_vertical("research_discovery")
+    lane_hints = " ".join(
+        item.evidence_hint
+        for stage in ("probe", "decide")
+        for item in vertical_checklist_items(module)[stage]
+        if item.id in {
+            "probe.preregistered-lanes",
+            "probe.execution-evidence-separated",
+            "decide.dual-lane",
+        }
+    )
+    assert "THEORY_EVIDENCE.json" in lane_hints
+    assert "APPLICATION_EVIDENCE.json" in lane_hints
+    assert "PROBE.json" not in lane_hints
+
+
 def test_research_discovery_roles_and_skills_are_complete() -> None:
     module = load_vertical("research_discovery")
     for role in ("manager", "planner", "engineer", "reviewer", "scientist_create", "scientist"):

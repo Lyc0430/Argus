@@ -101,7 +101,10 @@ CHECKLIST_ITEMS: dict[str, tuple[ChecklistItem, ...]] = {
                 "Every finalist has separate minimum theory and application probes "
                 "preregistered before their outcomes are interpreted."
             ),
-            evidence_hint="bets/<bet_id>/theory/PROBE.json and application/PROBE.json",
+            evidence_hint=(
+                "bets/<bet_id>/THEORY_EVIDENCE.json and "
+                "APPLICATION_EVIDENCE.json"
+            ),
         ),
         ChecklistItem(
             id="probe.execution-evidence-separated",
@@ -109,7 +112,7 @@ CHECKLIST_ITEMS: dict[str, tuple[ChecklistItem, ...]] = {
                 "Each lane records execution status, failure class, idea status, raw "
                 "evidence, and scope limits without treating infrastructure failure as science."
             ),
-            evidence_hint="theory and application PROBE.json lane records",
+            evidence_hint="THEORY_EVIDENCE.json and APPLICATION_EVIDENCE.json lane records",
         ),
     ),
     "decide": (
@@ -132,7 +135,9 @@ CHECKLIST_ITEMS: dict[str, tuple[ChecklistItem, ...]] = {
                 "Every selected or materially rejected Bet is supported by faithful, "
                 "separately interpreted theory and application lane evidence."
             ),
-            evidence_hint="BET.json plus theory/PROBE.json and application/PROBE.json lane files",
+            evidence_hint=(
+                "BET.json plus THEORY_EVIDENCE.json and APPLICATION_EVIDENCE.json"
+            ),
         ),
         ChecklistItem(
             id="decide.handoff-valid",

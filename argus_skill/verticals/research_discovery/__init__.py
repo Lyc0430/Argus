@@ -33,6 +33,7 @@ __all__ = [
     "completion_issue",
     "content_digest",
     "main",
+    "premise_digest",
     "role_banner",
     "validate_package",
 ]
@@ -43,6 +44,7 @@ _EVIDENCE_EXPORTS = {
     "completion_issue",
     "content_digest",
     "main",
+    "premise_digest",
     "validate_package",
 }
 
