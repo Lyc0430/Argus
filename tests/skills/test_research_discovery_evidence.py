@@ -510,6 +510,24 @@ def test_pre_probe_gate_rows_are_current_and_well_formed(
     )
 
 
+@pytest.mark.parametrize("bad_status", [["pass"], {"value": "pass"}, None])
+def test_malformed_pre_probe_status_returns_stable_invalid_bet(
+    tmp_path: Path,
+    bad_status: object,
+) -> None:
+    root = _valid_project(tmp_path)
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["pre_probe_gates"]["application_anchor"]["status"] = bad_status
+    _write_json(bet_path, bet)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_bet:B1:pre_probe_gates.application_anchor.status")
+        for error in validate_package(root)
+    )
+
+
 @pytest.mark.parametrize(
     ("bridge_status", "gate_status"),
     [
@@ -690,6 +708,94 @@ def test_no_bet_rejects_blocked_probe_decision_basis(tmp_path: Path) -> None:
 
     assert any(
         error.startswith("invalid_decision:") and "blocked_probe" in error
+        for error in validate_package(root)
+    )
+
+
+@pytest.mark.parametrize(
+    "failed_gates",
+    [[], ["theory_probe", "nearest_work"]],
+)
+def test_blocked_probe_gate_shape_is_nonempty_and_probe_only(
+    tmp_path: Path,
+    failed_gates: list[str],
+) -> None:
+    root = _valid_project(tmp_path, decision="paused")
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"][0].update(
+        decision_basis="blocked_probe",
+        failed_gates=failed_gates,
+    )
+    _write_json(decision_path, decision)
+    theory_path = root / "research/discovery/bets/B1/THEORY_EVIDENCE.json"
+    theory = json.loads(theory_path.read_text(encoding="utf-8"))
+    theory.update(
+        execution_status="blocked",
+        failure_class="dependency",
+        idea_status="untested",
+    )
+    _write_json(theory_path, theory)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_decision:")
+        and "blocked_probe accepts only probe gates" in error
+        for error in validate_package(root)
+    )
+
+
+def test_blocked_probe_requires_overall_paused_decision(tmp_path: Path) -> None:
+    root = _valid_project(tmp_path)
+    _add_ineligible_killed_bet(root)
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"][1].update(
+        decision_basis="blocked_probe",
+        failed_gates=["theory_probe"],
+    )
+    _write_json(decision_path, decision)
+    theory_path = root / "research/discovery/bets/B2/THEORY_EVIDENCE.json"
+    theory = json.loads(theory_path.read_text(encoding="utf-8"))
+    theory.update(
+        execution_status="blocked",
+        failure_class="dependency",
+        idea_status="untested",
+    )
+    _write_json(theory_path, theory)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_decision:")
+        and "blocked_probe requires decision=paused" in error
+        for error in validate_package(root)
+    )
+
+
+def test_blocked_probe_requires_every_named_probe_to_be_grounded(
+    tmp_path: Path,
+) -> None:
+    root = _valid_project(tmp_path, decision="paused")
+    decision_path = root / "research/discovery/DECISION.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    decision["eligibility"][0].update(
+        decision_basis="blocked_probe",
+        failed_gates=["theory_probe", "application_probe"],
+    )
+    _write_json(decision_path, decision)
+    theory_path = root / "research/discovery/bets/B1/THEORY_EVIDENCE.json"
+    theory = json.loads(theory_path.read_text(encoding="utf-8"))
+    theory.update(
+        execution_status="blocked",
+        failure_class="dependency",
+        idea_status="untested",
+    )
+    _write_json(theory_path, theory)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_decision:")
+        and "blocked_probe lacks a blocked or failed lane" in error
         for error in validate_package(root)
     )
 

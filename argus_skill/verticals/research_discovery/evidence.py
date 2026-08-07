@@ -187,13 +187,14 @@ def _pre_probe_gate_statuses(
     statuses: dict[str, str] = {}
     for gate in PRE_PROBE_GATE_ORDER:
         row = _mapping(gates.get(gate))
-        if row is None or row.get("status") not in {"pass", "fail"}:
+        status = row.get("status") if row is not None else None
+        if not isinstance(status, str) or status not in {"pass", "fail"}:
             findings.append(f"pre_probe_gates.{gate}.status must be pass or fail")
             continue
         if not _text(row.get("rationale")):
             findings.append(f"pre_probe_gates.{gate}.rationale is empty")
             continue
-        statuses[gate] = str(row["status"])
+        statuses[gate] = status
     return statuses if len(statuses) == len(PRE_PROBE_GATE_ORDER) else None
 
 
@@ -489,24 +490,34 @@ def _blocked_probe_basis_is_grounded(
     if record is None:
         return False
     lane_by_gate = {
-        "theory_probe": (record.get("theory"), THEORY_EVIDENCE),
-        "application_probe": (record.get("application"), APPLICATION_EVIDENCE),
+        "theory_probe": (
+            record.get("theory"),
+            THEORY_EVIDENCE,
+            record.get("theory_valid") is True,
+        ),
+        "application_probe": (
+            record.get("application"),
+            APPLICATION_EVIDENCE,
+            record.get("application_valid") is True,
+        ),
     }
     failed_probe_gates = set(row.get("failed_gates", ())) & PROBE_GATES
     if not failed_probe_gates:
         return False
     for gate in failed_probe_gates:
-        lane_record, contract = lane_by_gate[gate]
+        lane_record, contract, valid = lane_by_gate[gate]
         if not isinstance(lane_record, Mapping):
-            return True
+            continue
         failure = lane_record.get("failure_class")
         if (
             lane_record.get("execution_status") != "completed"
             or failure in contract.non_idea_failures
             or failure in contract.advisory_failures
+            or not valid
         ):
-            return True
-    return False
+            continue
+        return False
+    return True
 
 
 def _validate_decision(
@@ -617,12 +628,21 @@ def _validate_decision(
                 issue = _completed_probe_basis_issue(row, records.get(bet_id))
                 if issue:
                     errors.append(f"eligibility {bet_id} {issue}")
-            elif basis == "blocked_probe" and not _blocked_probe_basis_is_grounded(
-                row, records.get(bet_id)
-            ):
-                errors.append(
-                    f"eligibility {bet_id} blocked_probe lacks a blocked or failed lane"
-                )
+            elif basis == "blocked_probe":
+                if decision != "paused":
+                    errors.append(
+                        f"eligibility {bet_id} blocked_probe requires decision=paused"
+                    )
+                if not gate_set or not gate_set <= PROBE_GATES:
+                    errors.append(
+                        f"eligibility {bet_id} blocked_probe accepts only probe gates"
+                    )
+                elif not _blocked_probe_basis_is_grounded(
+                    row, records.get(bet_id)
+                ):
+                    errors.append(
+                        f"eligibility {bet_id} blocked_probe lacks a blocked or failed lane"
+                    )
 
     ordering = payload.get("ordering")
     if not isinstance(ordering, list) or any(
