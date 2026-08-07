@@ -41,6 +41,7 @@ from argus_skill.core.models import RunnerOptions
 @dataclass
 class FakeCliRunnerOptions:
     model: str = "gpt-5.4-mini"
+    fallback_models: list[str] | None = None
     reasoning_effort: str = "medium"
     dangerous_yolo: bool = False
     full_auto: bool = False
@@ -214,6 +215,7 @@ def test_run_exec_translates_options_and_result(
 
     options = RunnerOptions(
         model="gpt-5.4-mini",
+        fallback_models=["opus"],
         reasoning_effort="high",
         working_dir=str(tmp_path),
         extra_args=["-c", "config_profile=tb"],
@@ -232,6 +234,7 @@ def test_run_exec_translates_options_and_result(
     # --- options were translated correctly
     forwarded = captured["options"]
     assert forwarded.model == "gpt-5.4-mini"
+    assert forwarded.fallback_models == ["opus"]
     assert forwarded.reasoning_effort == "high"
     assert forwarded.working_dir == str(tmp_path)
     assert forwarded.extra_args == ["-c", "config_profile=tb"]

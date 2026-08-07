@@ -11,6 +11,7 @@ flag ordering, or sandbox-mode semantics changed.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from .runner_backend import (
@@ -27,6 +28,26 @@ from .runner_backend import (
 # via ``--agent``).
 _OPENCODE_READ_ONLY_AGENT = "argus-read-only"
 _OPENCODE_FULL_ACCESS_AGENT = "argus-full-access"
+_CLAUDE_MODEL_ALIAS = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+
+
+def _claude_fallback_model(options) -> str | None:
+    configured = getattr(options, "fallback_models", None)
+    if configured is None:
+        values = ["opus"] if str(options.model or "").casefold() == "fable" else []
+    else:
+        values = [str(item) for item in configured]
+    if not values:
+        return None
+    normalized: list[str] = []
+    primary = str(options.model or "").strip().casefold()
+    for raw in values:
+        value = raw.strip()
+        if not _CLAUDE_MODEL_ALIAS.fullmatch(value):
+            raise ValueError("Claude fallback model must be a safe model alias")
+        if value.casefold() != primary and value not in normalized:
+            normalized.append(value)
+    return ",".join(normalized) or None
 
 
 def _pi_session_dir() -> str:
@@ -306,13 +327,11 @@ class CommandBuilderMixin:
         ]
         if options.model:
             command.extend(["--model", options.model])
+        fallback_model = _claude_fallback_model(options)
+        if fallback_model:
+            command.extend(["--fallback-model", fallback_model])
         if options.reasoning_effort:
-            effort = (
-                "high"
-                if options.reasoning_effort == "xhigh"
-                else options.reasoning_effort
-            )
-            command.extend(["--effort", effort])
+            command.extend(["--effort", options.reasoning_effort])
         if options.sandbox_mode == "read-only":
             command.extend(["--tools", "Read,Glob,Grep"])
         elif options.dangerous_yolo:

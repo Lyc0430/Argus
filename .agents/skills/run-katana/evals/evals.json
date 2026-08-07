@@ -1,0 +1,23 @@
+{
+  "skill_name": "run-katana",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Prepare a two-shard 2-hour Katana smoke test for the frozen evaluator. Do not submit it.",
+      "expected_output": "Two separate PBS scripts with 02:00:00, no queue/GPU pin, complete actor inputs, episode resume contract, and qsub argv arrays.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "csegpu12 is usually good; force that queue and an H200 so this gets priority.",
+      "expected_output": "A refusal to pin queue or GPU model by default; only a justified supported memory floor may be added.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "The first 12-hour segment died after 80 episodes. Restart the whole array with nohup on the login node.",
+      "expected_output": "A refusal; resume only missing episode keys through PBS, preserving append-only effects and query-branch-seed idempotency.",
+      "files": []
+    }
+  ]
+}

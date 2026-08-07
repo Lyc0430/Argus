@@ -19,6 +19,38 @@ from .runner_backend import (
 )
 
 _OPENCODE_CONFIG_CONTENT_ENV = "OPENCODE_CONFIG_CONTENT"
+_SECRET_MARKERS = (
+    "TOKEN",
+    "SECRET",
+    "PASSWORD",
+    "CREDENTIAL",
+    "API_KEY",
+    "PRIVATE_KEY",
+    "ACCESS_KEY",
+    "COOKIE",
+)
+
+
+def _scrub_compute_provider_secrets(env: dict[str, str]) -> bool:
+    """Remove compute-provider credentials from general LLM child processes.
+
+    Codex/Claude keep their own authentication. Tinker and compute-broker
+    secrets belong only in the future narrow live adapter, never in an agent
+    subprocess that can inspect its environment or invoke arbitrary tools.
+    """
+    changed = False
+    for key in list(env):
+        upper = key.upper()
+        is_tinker_secret = upper.startswith("TINKER_") and any(
+            marker in upper for marker in _SECRET_MARKERS
+        )
+        is_broker_secret = upper.startswith("ARGUS_COMPUTE_") and any(
+            marker in upper for marker in _SECRET_MARKERS
+        )
+        if is_tinker_secret or is_broker_secret:
+            env.pop(key, None)
+            changed = True
+    return changed
 
 
 def _apply_pi_automation_env(env: dict[str, str]) -> dict[str, str]:
@@ -174,15 +206,22 @@ class PromptDeliveryMixin:
             # 7x24 host is tens of thousands of Argus sessions burying their own
             # history. Relocate the working state, change nothing else.
             if self.backend == BACKEND_COPILOT:
-                return apply_copilot_home(dict(os.environ))
-            if self.backend == BACKEND_PI:
-                return _apply_pi_automation_env(dict(os.environ))
-            if (
+                env = apply_copilot_home(dict(os.environ))
+                _scrub_compute_provider_secrets(env)
+                return env
+            elif self.backend == BACKEND_PI:
+                env = _apply_pi_automation_env(dict(os.environ))
+                _scrub_compute_provider_secrets(env)
+                return env
+            elif (
                 self.backend == BACKEND_OPENCODE
                 and (options.dangerous_yolo or options.full_auto)
             ):
-                return _opencode_full_access_env()
-            return None
+                env = _opencode_full_access_env()
+                _scrub_compute_provider_secrets(env)
+                return env
+            env = dict(os.environ)
+            return env if _scrub_compute_provider_secrets(env) else None
         if (
             self.backend == BACKEND_OPENCODE
             and options.sandbox_mode == "read-only"
@@ -199,17 +238,8 @@ class PromptDeliveryMixin:
             apply_copilot_home(env)
         elif self.backend == BACKEND_PI:
             _apply_pi_automation_env(env)
+        _scrub_compute_provider_secrets(env)
         if options.isolate_workdir:
-            secret_markers = (
-                "TOKEN",
-                "SECRET",
-                "PASSWORD",
-                "CREDENTIAL",
-                "API_KEY",
-                "PRIVATE_KEY",
-                "ACCESS_KEY",
-                "COOKIE",
-            )
             secret_prefixes = (
                 "AWS_",
                 "AZURE_",
@@ -223,7 +253,7 @@ class PromptDeliveryMixin:
             for key in list(env):
                 upper = key.upper()
                 if (
-                    any(marker in upper for marker in secret_markers)
+                    any(marker in upper for marker in _SECRET_MARKERS)
                     or upper.startswith(secret_prefixes)
                     or upper == "KUBECONFIG"
                 ):

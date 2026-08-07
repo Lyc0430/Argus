@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "provider": "tinker",
+  "job_key": "verify.tinker.001",
+  "frozen": false,
+  "output_paths": ["result.json"]
+}

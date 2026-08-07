@@ -49,6 +49,10 @@ A project can stop, resume, survive a runtime replacement, and continue from its
 
 **Native backends:** `GitHub Copilot CLI` · `Pi` · `OpenAI Codex CLI` · `Claude Code` · `OpenCode`
 
+For the local Tinker/Katana research-compute extension, see the
+**[dry-run compute broker guide](docs/compute-broker.md)**. Live provider calls
+and cluster submission are intentionally outside the current safety boundary.
+
 ## Quick Install
 
 ### Requirements

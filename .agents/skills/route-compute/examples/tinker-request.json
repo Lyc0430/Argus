@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "job_key": "demo.prompt-sanity.001",
+  "mission_id": "demo",
+  "project": "consequence",
+  "task_kind": "prompt_sanity",
+  "evidence_class": "exploratory",
+  "provider_hint": "auto",
+  "model": "Qwen/Qwen3.5-4B",
+  "estimated_cost_usd": 5,
+  "estimated_input_tokens": 16000,
+  "estimated_output_tokens": 8000,
+  "expected_outputs": ["runs/demo/tinker-results.jsonl"],
+  "workload": {
+    "prompt_file": "inputs/demo-prompts.jsonl",
+    "prompt_count": 8,
+    "num_samples": 2,
+    "max_tokens": 512,
+    "temperature": 0.7
+  }
+}
