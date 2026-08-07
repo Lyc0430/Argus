@@ -25,7 +25,6 @@ _PYTHON_ADMIN_FLAGS = frozenset(
         "--gc",
         "--watch",
         "--follow",
-        "--web",
         "--notify",
         "--init-identity",
         "--setup",
