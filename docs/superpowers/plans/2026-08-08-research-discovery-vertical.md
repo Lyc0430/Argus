@@ -22,6 +22,8 @@
 - Do not copy unlicensed text from `/Users/landon/Downloads/theory-research-workflow 3/`; write Argus-native Skills using only general research principles.
 - All bet IDs match `[A-Za-z0-9_-]+`; all artifact references are exact project-relative regular-file paths under the project root.
 - Existing Vertical behavior and existing flat Skill ownership invariants must remain green; any same-path Skill override must be explicitly allowlisted and tested.
+- The macOS baseline has 23 unrelated environment/platform failures; completion requires no new full-suite failures plus a fully green focused and adjacent suite, not repairs outside this feature.
+- Every new role Skill uses a hyphenated `name`, a third-person `description` beginning with `Use when...`, and is pressure-tested individually before the next Skill is authored.
 
 ---
 
@@ -488,14 +490,23 @@ Each stage gets at least two `ChecklistItem`s. The `decide` stage declares all f
 
 `role_banner` maps the six Argus banner roles to the ten role Skill files. For Engineer, load `engineer/idea-discovery.md` as the always-on role contract; the remaining Engineer Skills stay matchable methods. Export all public hooks from `__init__.py`.
 
-- [ ] **Step 4: Write Argus-native role Skills**
+- [ ] **Step 4: Pressure-test and write Argus-native role Skills one at a time**
 
-Every Skill has exactly `name` and `description` frontmatter. Use these non-negotiable bodies:
+For each of the ten Skills, run a fresh-context scenario without that Skill and
+record the concrete contract violation, then author only that Skill, rerun the
+same scenario with it, and verify the required behavior before moving to the
+next file. Store the scenarios and observed results in the SDD task report;
+do not batch-create untested Skills.
+
+Every Skill has exactly `name` and `description` frontmatter. Names use only
+letters, numbers, and hyphens; descriptions begin with `Use when...` and state
+triggering conditions rather than summarizing the procedure. Use these
+non-negotiable bodies:
 
 ```markdown
 ---
-name: "Research Discovery Manager"
-description: "Route and govern theory-application research discovery without escalating to proof, full experiments, implementation, or publication."
+name: research-discovery-manager
+description: "Use when governing early theory-application direction search before a proof, full experiment, implementation, or publication task has been selected."
 ---
 
 This Vertical ends with a decision-ready portfolio, not a proved theorem, validated product, or paper. Preserve zero-or-one recommendation semantics. Never switch Vertical or enqueue the handoff automatically.
@@ -503,8 +514,8 @@ This Vertical ends with a decision-ready portfolio, not a proved theorem, valida
 
 ```markdown
 ---
-name: "Theory-Application Bridge"
-description: "Build a load-bearing bridge between a precise theoretical mechanism and a real application decision."
+name: theory-application-bridge
+description: "Use when a candidate direction claims that a precise theoretical mechanism changes a real application decision or prediction."
 ---
 
 Require a problem anchor, theory anchor, explicit variable mapping, dependency claim, observable prediction, and no-garnish counterfactual. If removing the theory leaves the application design and prediction unchanged, mark the bridge weak and do not recommend the Bet.
@@ -512,8 +523,8 @@ Require a problem anchor, theory anchor, explicit variable mapping, dependency c
 
 ```markdown
 ---
-name: "Dual-Lane Probing"
-description: "Preregister and execute separate minimum theory and application probes for a Research Bet."
+name: dual-lane-probing
+description: "Use when a Research Bet needs separate minimum theory and application probes before it can be selected or rejected."
 ---
 
 Record execution_status, failure_class, and idea_status independently in each lane. Infrastructure or access failure is not negative scientific evidence. Stop at the cheapest faithful discriminator; do not expand into a full proof, experiment, or production prototype.
@@ -864,7 +875,7 @@ pytest -q \
 
 Expected: all pass, including parameterized coverage over every registered Vertical.
 
-- [ ] **Step 4: Run the complete test suite**
+- [ ] **Step 4: Run the complete test suite and compare with the recorded baseline**
 
 Run:
 
@@ -872,7 +883,9 @@ Run:
 pytest -q
 ```
 
-Expected: exit code 0 with no failed tests.
+Expected: the focused and adjacent suites are green and the full run introduces
+no failures beyond the 23 recorded macOS environment/platform baseline failures.
+Do not modify unrelated production code merely to make those baseline tests pass.
 
 - [ ] **Step 5: Run static repository hygiene checks**
 
