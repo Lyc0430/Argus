@@ -164,6 +164,13 @@ def completion_issue(project_root: object) -> str:
     return validate_completion(project_root)
 
 
+def after_mission(**context: object) -> dict[str, object]:
+    """Reconcile the bounded Seed Project DAG after durable settlement."""
+    from .expansion import reconcile_after_mission
+
+    return reconcile_after_mission(**context)
+
+
 def role_banner(role: str) -> str:
     """Load the discovery contract for a generic Argus role."""
     role_name = (role or "").strip().lower()
@@ -194,6 +201,7 @@ __all__ = [
     "STAGE_CHECKS",
     "STAGE_ORDER",
     "WORKFLOW_MODE",
+    "after_mission",
     "completion_gate",
     "completion_issue",
     "role_banner",
