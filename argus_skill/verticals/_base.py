@@ -239,6 +239,27 @@ def vertical_completion_issue(
     )
 
 
+def vertical_after_mission(
+    mod: VerticalDefinition,
+    **context: object,
+) -> dict[str, object]:
+    """Run an optional post-settlement Vertical reconciliation hook.
+
+    The mission is already durable when this hook runs. A broken optional
+    controller therefore reports a diagnostic instead of reopening or
+    corrupting mission settlement.
+    """
+    fn = getattr(mod, "after_mission", None)
+    if not callable(fn):
+        return {}
+    try:
+        result = fn(**context)
+    except Exception as exc:  # noqa: BLE001 - optional hook is fail-soft
+        log.exception("vertical after_mission hook failed")
+        return {"status": "hook_error", "error": type(exc).__name__}
+    return result if isinstance(result, dict) else {}
+
+
 def vertical_completion_contract_version(mod: VerticalDefinition) -> int:
     """Return the optional versioned final-stage completion contract."""
     raw = getattr(mod, "COMPLETION_CONTRACT_VERSION", 0)
@@ -298,6 +319,7 @@ __all__ = [
     "vertical_completion_contract_version",
     "vertical_completion_gate",
     "vertical_completion_issue",
+    "vertical_after_mission",
     "vertical_research_target_levels",
     "vertical_workflow_mode",
     "vertical_search_altitude",
