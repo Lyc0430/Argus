@@ -207,6 +207,20 @@ Vertical 可以为你的领域提供专属阶段、Skill、数据集、工具、
 已经就绪；可选的交接只会命名下一项有边界的 `math`、`research` 或 `software`
 任务。
 
+Research Discovery 也可以作为动态 Seed Project 运行。一个有依据的初始化点会
+扩展成自己的有界 Bet DAG：科学否定、最近工作碰撞，或同一前提下第二次无信息
+probe，只会释放当前分支，并自动安排一条近域和一条远域续接路线；不相关的兄弟
+分支继续推进。执行、访问、实现、评测器、资源或权限失败只触发有界修复，绝不
+作为 Idea 被否定的证据。
+
+每个项目最多允许五个活跃 Bet，同时仍由宿主级并发、费用、token、环境交互、
+凭据与 compute broker 限制实际执行。系统状态可从
+`research/discovery/AUTO_EXPANSION.json`、不可变的
+`expansion/requests/<event_id>.json` 和类型化 Rejection Capsule 审计。Seed
+Project 的数量可以动态增长；Memory-as-Control 的五个项目只是一个示例组合，
+不是五种固定角色或项目类型。全自动表示在现有权限内无需逐分支批准，不会获得
+新的外部权限，也不会把探索完成等同于理论证明、生产可用或论文就绪。
+
 ### 让其他 Agent 成为外层入口
 
 你可以通过 GitHub Copilot、Pi、Codex、Claude Code、OpenCode、OpenClaw 或 Hermes 调用 Argus、检查状态、操作本地 CLI 或 Web/API，并继续迭代自己的部署。

@@ -298,3 +298,112 @@ def test_changed_decision_imports_exact_capsule_into_global_graph(monkeypatch, t
     graph = tmp_path / "global" / "research" / "experience_graph.jsonl"
     assert request["event_id"] in graph.read_text(encoding="utf-8")
 
+
+def test_restart_reuses_immutable_request_when_global_experience_changes(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    root = _project(tmp_path / "project")
+    _valid(monkeypatch)
+    backlog = Backlog(tmp_path / "backlog.jsonl")
+    kwargs = {
+        "project_root": root,
+        "state_root": tmp_path / "state",
+        "global_root": tmp_path / "global",
+        "backlog": backlog,
+        "outcome": {},
+    }
+    first = expansion.reconcile_after_mission(**kwargs)
+    request_path = Path(first["request_path"])
+    frozen = request_path.read_bytes()
+    state_path = root / "research/discovery/AUTO_EXPANSION.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["processed_decisions"] = []
+    state["requests"] = {}
+    _write_json(state_path, state)
+
+    from argus_skill.verticals.research_discovery.experience_graph import (
+        ResearchExperienceGraph,
+    )
+
+    ResearchExperienceGraph(
+        tmp_path / "global/research/experience_graph.jsonl"
+    ).append(
+        {
+            "schema_version": 1,
+            "event_id": "evt-prior",
+            "source_bet_ids": ["B0"],
+            "source_decision_sha256": "a" * 64,
+            "failure_class": "scientific_rejection",
+            "killed_premise": "Local influence identified value.",
+            "survivors": ["The control problem remains."],
+            "forbidden_region": ["unidentified transport"],
+            "open_tension": "Value and influence diverge.",
+            "mutation_demand": "Change the estimand.",
+            "structure_tags": ["identifiability"],
+            "artifact_refs": ["research/discovery/DECISION.json"],
+        },
+        source_project_id="other-project",
+    )
+
+    restarted = expansion.reconcile_after_mission(**kwargs)
+    assert restarted["status"] == "enqueued"
+    assert request_path.read_bytes() == frozen
+    assert len(backlog.all()) == 1
+
+
+def test_symlinked_discovery_parent_is_rejected_before_controller_write(
+    tmp_path: Path,
+) -> None:
+    external = _project(tmp_path / "external") / "research/discovery"
+    root = tmp_path / "project"
+    (root / "research").mkdir(parents=True)
+    (root / "research/discovery").symlink_to(external, target_is_directory=True)
+
+    result = expansion.reconcile_after_mission(
+        project_root=root,
+        state_root=tmp_path / "state",
+        global_root=tmp_path / "global",
+        backlog=Backlog(tmp_path / "backlog.jsonl"),
+        outcome={},
+    )
+
+    assert result["status"] == "invalid"
+    assert not (external / "AUTO_EXPANSION.json").exists()
+
+
+def test_blocked_probe_repair_attempts_are_bounded_across_decisions(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    root = _project(tmp_path, decision="paused", basis="blocked_probe")
+    _valid(monkeypatch, paused=True)
+    backlog = Backlog(tmp_path / "backlog.jsonl")
+    kwargs = {
+        "project_root": root,
+        "state_root": tmp_path / "state",
+        "global_root": tmp_path / "global",
+        "backlog": backlog,
+        "outcome": {},
+    }
+
+    assert expansion.reconcile_after_mission(**kwargs)["action"] == "repair_probe"
+    decision_path = root / "research/discovery/DECISION.json"
+    for index in (2, 3):
+        decision = json.loads(decision_path.read_text(encoding="utf-8"))
+        decision["selection_rationale"] = f"Blocked observation {index}."
+        _write_json(decision_path, decision)
+        result = expansion.reconcile_after_mission(**kwargs)
+
+    assert result["status"] == "repair_exhausted"
+    assert len(backlog.all()) == 2
+
+
+def test_frontier_exhaustion_does_not_hide_an_unresolved_request(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    state = expansion.initialize_seed_project(root, project_id="seed-a")
+    state["status"] = "frontier_exhausted"
+    state["requests"] = {"evt-a": {"status": "pending"}}
+    _write_json(root / "research/discovery/AUTO_EXPANSION.json", state)
+
+    assert expansion.automatic_expansion_issue(root).endswith(
+        "automatic_expansion_pending"
+    )

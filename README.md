@@ -221,6 +221,24 @@ does not mean the theorem is proved, the application works in production, or a
 paper is ready; the optional handoff names the next bounded `math`, `research`,
 or `software` task.
 
+Research Discovery can also run as a dynamic Seed Project. One grounded
+initialization point grows into its own bounded Bet DAG: a scientific rejection,
+nearest-work collision, or second information-free probe releases that branch
+and automatically schedules one near-domain and one distant-domain continuation.
+Unrelated siblings keep running. Execution, access, implementation, evaluator,
+resource, or authority failures schedule bounded repair instead and never count
+as evidence against the Idea.
+
+Each project allows at most five active Bets, while host concurrency, cost,
+token, transition, credential, and compute-broker limits remain authoritative.
+State is auditable in `research/discovery/AUTO_EXPANSION.json`, immutable
+`expansion/requests/<event_id>.json` files, and typed Rejection Capsules. Any
+number of Seed Projects may exist; the five Memory-as-Control projects are an
+example portfolio, not five fixed roles or project types. Full automation means
+no per-branch approval inside existing authority—it does not grant new external
+permissions or turn discovery completion into proof, production readiness, or
+paper readiness.
+
 ### Use another agent as the outer layer
 
 GitHub Copilot, Pi, Codex, Claude Code, OpenCode, OpenClaw, or Hermes can be the environment from which you invoke Argus, inspect its state, operate its local CLI or Web/API surface, and continue improving the deployment.

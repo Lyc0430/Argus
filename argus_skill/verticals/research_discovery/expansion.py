@@ -58,6 +58,20 @@ def _state_path(root: Path) -> Path:
     return _discovery(root) / "AUTO_EXPANSION.json"
 
 
+def _discovery_root_is_safe(root: Path) -> bool:
+    research = root / "research"
+    discovery = research / "discovery"
+    try:
+        return (
+            research.is_dir()
+            and not research.is_symlink()
+            and discovery.is_dir()
+            and not discovery.is_symlink()
+        )
+    except OSError:
+        return False
+
+
 def _load_object(path: Path) -> dict[str, Any] | None:
     if path.is_symlink() or not path.is_file():
         return None
@@ -111,6 +125,8 @@ def _safe_project_id(value: str) -> str:
 def initialize_seed_project(project_root: Path, *, project_id: str) -> dict[str, Any]:
     """Initialize a Seed Project exactly once from its first portfolio objective."""
     root = Path(project_root).resolve()
+    if not _discovery_root_is_safe(root):
+        raise ValueError("research/discovery must be a real project-local directory")
     state_path = _state_path(root)
     with _controller_lock(root):
         existing = _load_object(state_path)
@@ -325,15 +341,29 @@ def _request_task(request: Mapping[str, Any]) -> BacklogItem:
     )
 
 
-def _write_immutable(path: Path, payload: Mapping[str, Any]) -> None:
+def _write_immutable(path: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
     existing = _load_object(path)
     if existing is not None:
-        if existing != dict(payload):
+        binding_fields = (
+            "schema_version",
+            "event_id",
+            "project_id",
+            "trigger",
+            "action",
+            "decision_sha256",
+            "premise_family",
+            "source_bet_ids",
+            "failed_gates",
+            "branch_modes",
+            "request_ref",
+        )
+        if any(existing.get(field) != payload.get(field) for field in binding_fields):
             raise ValueError(f"immutable expansion request changed: {path.name}")
-        return
+        return existing
     if path.exists() or path.is_symlink():
         raise ValueError(f"unsafe expansion request path: {path.name}")
     _atomic_json(path, payload)
+    return dict(payload)
 
 
 def _reconcile_prior_requests(
@@ -483,6 +513,22 @@ def reconcile_after_mission(
         if not isinstance(requests, dict):
             requests = {}
             state["requests"] = requests
+        if action == "repair_probe":
+            repair_limit = max(
+                0,
+                int(policy.get("max_repair_attempts", 2) or 0),
+            )
+            repair_count = sum(
+                isinstance(record, dict)
+                and record.get("action") == "repair_probe"
+                and record.get("premise_family") == result.premise_family
+                for record in requests.values()
+            )
+            if repair_count >= repair_limit:
+                processed.append(result.decision_sha256)
+                state["status"] = "repair_exhausted"
+                _atomic_json(_state_path(root), state)
+                return {"status": "repair_exhausted", "action": "none"}
         expansion_count = sum(
             isinstance(record, dict) and record.get("action") == "derive_near_far"
             for record in requests.values()
@@ -536,15 +582,16 @@ def reconcile_after_mission(
             "request_ref": relative_request,
         }
         request_path = root / relative_request
-        _write_immutable(request_path, request)
+        request = _write_immutable(request_path, request)
         task = _request_task(request)
         backlog.ensure_many([task])
         requests[event_id] = {
             "action": action,
             "decision_sha256": result.decision_sha256,
+            "premise_family": result.premise_family,
             "task_id": task.id,
             "status": task.status,
-            "repair_attempts": 0,
+            "repair_attempts": 1 if action == "repair_probe" else 0,
             "request_ref": relative_request,
         }
         processed.append(result.decision_sha256)
@@ -570,8 +617,6 @@ def automatic_expansion_issue(project_root: Path) -> str:
     state = _load_object(path)
     if state is None or state.get("schema_version") != 1:
         return "research_discovery:invalid_auto_expansion"
-    if state.get("status") == "frontier_exhausted":
-        return ""
     requests = state.get("requests")
     if isinstance(requests, dict) and any(
         isinstance(record, dict)
@@ -579,6 +624,8 @@ def automatic_expansion_issue(project_root: Path) -> str:
         for record in requests.values()
     ):
         return "research_discovery:automatic_expansion_pending"
+    if state.get("status") == "frontier_exhausted":
+        return ""
     bets = _canonical_bets(root)
     policy = state.get("policy") if isinstance(state.get("policy"), dict) else {}
     if bets is None:
@@ -588,6 +635,8 @@ def automatic_expansion_issue(project_root: Path) -> str:
         return "research_discovery:automatic_frontier_exceeds_limit"
     if state.get("status") == "frontier_invalid":
         return "research_discovery:automatic_frontier_invalid"
+    if state.get("status") == "repair_exhausted":
+        return "research_discovery:automatic_repair_exhausted"
     return ""
 
 
