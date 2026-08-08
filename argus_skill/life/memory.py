@@ -1122,6 +1122,57 @@ class Backlog:
             self._save(items)
         return batch
 
+    def ensure_many(self, new_items: Iterable[BacklogItem]) -> list[BacklogItem]:
+        """Atomically ensure one deterministic batch exists exactly once.
+
+        Existing rows are returned unchanged when their authored contract
+        matches. Reusing an id for different work is rejected so a recovery
+        retry cannot silently mutate an already-settled mission.
+        """
+        batch = list(new_items)
+        if not batch:
+            return []
+        ids = [item.id for item in batch]
+        if len(ids) != len(set(ids)):
+            raise ValueError("backlog batch contains duplicate item ids")
+
+        def authored_contract(item: BacklogItem) -> tuple[Any, ...]:
+            return (
+                item.id,
+                item.title,
+                item.objective,
+                tuple(item.tags),
+                item.node_key,
+                tuple(
+                    tuple(sorted(ref.items()))
+                    for ref in item.context_refs
+                ),
+            )
+
+        with self._locked():
+            items = self._load()
+            by_id = {item.id: item for item in items}
+            ensured: list[BacklogItem] = []
+            changed = False
+            for requested in batch:
+                existing = by_id.get(requested.id)
+                if existing is not None:
+                    if authored_contract(existing) != authored_contract(requested):
+                        raise ValueError(
+                            f"backlog item {requested.id!r} has a different "
+                            "authored contract"
+                        )
+                    ensured.append(existing)
+                    continue
+                items.append(requested)
+                by_id[requested.id] = requested
+                ensured.append(requested)
+                changed = True
+            self._validate_no_dependency_cycles(items)
+            if changed:
+                self._save(items)
+        return ensured
+
     def supersede_pending_for_replacement(
         self,
         *,

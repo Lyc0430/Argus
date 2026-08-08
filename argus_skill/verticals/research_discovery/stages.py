@@ -161,7 +161,19 @@ CHECKLIST_ITEMS: dict[str, tuple[ChecklistItem, ...]] = {
 
 def completion_issue(project_root: object) -> str:
     from .evidence import completion_issue as validate_completion
-    return validate_completion(project_root)
+    issue = validate_completion(project_root)
+    if issue:
+        return issue
+    from .expansion import automatic_expansion_issue
+
+    return automatic_expansion_issue(Path(project_root))
+
+
+def after_mission(**context: object) -> dict[str, object]:
+    """Reconcile the bounded Seed Project DAG after durable settlement."""
+    from .expansion import reconcile_after_mission
+
+    return reconcile_after_mission(**context)
 
 
 def role_banner(role: str) -> str:
@@ -194,6 +206,7 @@ __all__ = [
     "STAGE_CHECKS",
     "STAGE_ORDER",
     "WORKFLOW_MODE",
+    "after_mission",
     "completion_gate",
     "completion_issue",
     "role_banner",

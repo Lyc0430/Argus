@@ -1565,3 +1565,128 @@ def test_non_regular_canonical_package_paths_return_stable_errors(
     assert any(
         error.startswith(f"{error_code}:") for error in validate_package(root)
     )
+
+
+@pytest.mark.parametrize(
+    "lineage",
+    [
+        [],
+        {
+            "source_event_id": "unsafe/event",
+            "parent_bet_ids": ["B0"],
+            "generation": 1,
+            "radius": "near",
+            "changed_dimensions": ["mechanism"],
+        },
+        {
+            "source_event_id": "evt-parent",
+            "parent_bet_ids": ["bad/id"],
+            "generation": 1,
+            "radius": "near",
+            "changed_dimensions": ["mechanism"],
+        },
+        {
+            "source_event_id": "evt-parent",
+            "parent_bet_ids": ["B0"],
+            "generation": 0,
+            "radius": "near",
+            "changed_dimensions": ["mechanism"],
+        },
+        {
+            "source_event_id": "evt-parent",
+            "parent_bet_ids": ["B0"],
+            "generation": 1,
+            "radius": "remote",
+            "changed_dimensions": ["mechanism"],
+        },
+        {
+            "source_event_id": "evt-parent",
+            "parent_bet_ids": ["B0"],
+            "generation": 1,
+            "radius": "near",
+            "changed_dimensions": [],
+        },
+        {
+            "source_event_id": "evt-parent",
+            "parent_bet_ids": ["B0"],
+            "generation": 1,
+            "radius": "near",
+            "changed_dimensions": ["title"],
+        },
+    ],
+)
+def test_derived_bet_lineage_rejects_malformed_or_relabel_only_shapes(
+    tmp_path: Path,
+    lineage: object,
+) -> None:
+    root = _valid_project(tmp_path, decision="no_bet")
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["lineage"] = lineage
+    _write_json(bet_path, bet)
+    _refresh_bindings(root)
+
+    assert any(
+        error.startswith("invalid_bet:B1:") and "lineage" in error
+        for error in validate_package(root)
+    )
+
+
+def test_far_lineage_requires_exact_theory_transfer_contract(tmp_path: Path) -> None:
+    root = _valid_project(tmp_path, decision="no_bet")
+    bet_path = root / "research/discovery/bets/B1/BET.json"
+    bet = json.loads(bet_path.read_text(encoding="utf-8"))
+    bet["lineage"] = {
+        "source_event_id": "evt-parent",
+        "parent_bet_ids": ["B0"],
+        "generation": 1,
+        "radius": "far",
+        "changed_dimensions": ["mechanism", "prediction"],
+    }
+    _write_json(bet_path, bet)
+    _refresh_bindings(root)
+    assert any(
+        error.startswith("invalid_bet:B1:") and "theory_transfer" in error
+        for error in validate_package(root)
+    )
+
+    bet["theory_transfer"] = {
+        "source_domain": "ecological adaptation",
+        "source_mechanism": "selection under stale environmental signals",
+        "target_role_mapping": [
+            {"source_role": "environmental signal", "target_role": "retrieved memory"},
+            {"source_role": "fitness", "target_role": "action utility"},
+        ],
+        "new_prediction": "Verification wins when signal age exceeds a state-change threshold.",
+        "negative_transfer_boundary": "The analogy fails when memory age is observed perfectly.",
+        "target_domain_probe": "Swap memory age at a fixed agent and environment snapshot.",
+    }
+    _write_json(bet_path, bet)
+    _refresh_bindings(root)
+    assert validate_package(root) == []
+
+
+def test_automatic_expansion_blocks_completion_until_request_is_resolved(
+    tmp_path: Path,
+) -> None:
+    from argus_skill.verticals.research_discovery import completion_issue as stage_issue
+    from argus_skill.verticals.research_discovery.expansion import (
+        initialize_seed_project,
+    )
+
+    root = _valid_project(tmp_path, decision="no_bet")
+    state = initialize_seed_project(root, project_id="seed-a")
+    state["requests"] = {
+        "evt-parent": {
+            "action": "derive_near_far",
+            "status": "pending",
+            "task_id": "rd-expand-parent",
+        }
+    }
+    _write_json(root / "research/discovery/AUTO_EXPANSION.json", state)
+    assert stage_issue(root) == "research_discovery:automatic_expansion_pending"
+
+    state["requests"]["evt-parent"]["status"] = "completed"
+    state["status"] = "frontier_exhausted"
+    _write_json(root / "research/discovery/AUTO_EXPANSION.json", state)
+    assert stage_issue(root) == ""

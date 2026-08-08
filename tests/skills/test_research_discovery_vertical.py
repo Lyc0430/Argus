@@ -82,3 +82,17 @@ def test_research_discovery_roles_and_skills_are_complete() -> None:
 def test_research_discovery_persistence_seeds_frame(tmp_path: Path) -> None:
     persist_vertical(tmp_path, "research_discovery")
     assert (tmp_path / "research/PIPELINE_STATE.json").read_text(encoding="utf-8").find('"current_stage": "frame"') >= 0
+
+
+def test_research_discovery_roles_shape_dynamic_portfolio_continuation() -> None:
+    module = load_vertical("research_discovery")
+    manager = vertical_role_banner(module, "manager")
+    planner = vertical_role_banner(module, "planner")
+    engineer = vertical_role_banner(module, "engineer")
+    reviewer = vertical_role_banner(module, "reviewer")
+
+    assert "Seed Project" in manager and "AUTO_EXPANSION.json" in manager
+    assert "local branch" in manager and "project completion" in manager
+    assert "near" in planner and "far" in planner and "siblings" in planner
+    assert "Rejection Capsule" in engineer and "theory_transfer" in engineer
+    assert "five active" in reviewer and "relabel" in reviewer

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from ._helpers import (
@@ -154,13 +155,43 @@ class PlannerOrchestrationMixin:
 
     def _post_mission_hook(self, outcome: dict[str, Any]) -> str:
         hook = self.config.post_mission_hook
-        if hook is None:
-            return ""
+        if hook is not None:
+            try:
+                stop_reason = str(hook(outcome) or "").strip()
+            except Exception:  # noqa: BLE001
+                log.exception("post mission hook raised; continuing")
+                stop_reason = ""
+            if stop_reason:
+                return stop_reason
+
         try:
-            return str(hook(outcome) or "").strip()
-        except Exception:  # noqa: BLE001
-            log.exception("post mission hook raised; continuing")
-            return ""
+            from ...skills.vertical_select import resolve_vertical
+            from ...verticals._base import (
+                load_vertical,
+                vertical_after_mission,
+            )
+
+            project_root = self._artifact_root()
+            vertical = resolve_vertical(project_root)
+            state_root = Path(
+                getattr(self.memory, "project_root", None)
+                or getattr(self.memory, "root", project_root)
+            )
+            global_root = Path(
+                getattr(self.memory, "global_root", None)
+                or getattr(self.memory, "root", state_root)
+            )
+            vertical_after_mission(
+                load_vertical(vertical, project_root=project_root),
+                project_root=project_root,
+                state_root=state_root,
+                global_root=global_root,
+                backlog=self.memory.backlog,
+                outcome=outcome,
+            )
+        except Exception:  # noqa: BLE001 - reconciliation cannot undo settlement
+            log.exception("vertical post-mission reconciliation failed; continuing")
+        return ""
 
 
 __all__ = ["PlannerOrchestrationMixin"]
