@@ -15,15 +15,18 @@ shipped with all three missing and became dead code that nothing called.
 from __future__ import annotations
 
 import inspect
+from types import SimpleNamespace
 
 from argus_skill.life.memory import BacklogItem
 from argus_skill.life.supervisor.backlog_guard import (
     DECISION_KEY,
     decision_evidence,
     describe_undecided,
+    ensure_manager_decision,
     needs_manager_decision,
     undecided_items,
 )
+from argus_skill.manager.domain_author import VerticalDecision
 
 
 def _written_directly(**kw) -> BacklogItem:
@@ -123,6 +126,44 @@ def test_an_empty_decision_yields_no_false_routing_mark() -> None:
     assert decision_evidence(None) == {}
 
 
+def test_guard_reuses_the_daemon_manager_for_a_direct_item(tmp_path) -> None:
+    from argus_skill.life import MemoryBundle
+
+    memory = MemoryBundle.for_cwd(
+        tmp_path,
+        global_root=tmp_path / "state",
+        fingerprint="s-backlog-manager",
+    )
+    memory.init()
+    item = memory.backlog.add(_written_directly(objective="inspect causal memory"))
+    calls: list[tuple[str, str | None]] = []
+
+    def decide_vertical(body: str, *, root_task_id: str | None = None):
+        calls.append((body, root_task_id))
+        return VerticalDecision(
+            choice="existing",
+            vertical="research_discovery",
+            workflow_mode="staged",
+            execution_task=body,
+            research_target_level="publishable",
+        )
+
+    manager = SimpleNamespace(
+        project_root=tmp_path,
+        decide_vertical=decide_vertical,
+    )
+
+    routed = ensure_manager_decision(memory, item, manager=manager)
+
+    assert calls == [("inspect causal memory", item.id)]
+    assert routed.manager_decision == {
+        "vertical": "research_discovery",
+        "workflow_mode": "staged",
+        "research_target_level": "publishable",
+        "routed": True,
+    }
+
+
 # -- the wiring, which once went missing -----------------------------------
 
 def test_the_backlog_item_carries_the_field() -> None:
@@ -148,6 +189,7 @@ def test_the_supervisor_routes_before_executing() -> None:
     # Must happen after the claim and before the mission context is built,
     # or the run proceeds under the default workflow.
     assert claim_at < guard_at < context_at
+    assert "manager=getattr(self.runner, \"manager\", None)" in source
 
 
 def test_status_reports_bypassed_items() -> None:

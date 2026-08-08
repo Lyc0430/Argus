@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from argus_skill.life.memory import Backlog, BacklogItem
+from argus_skill.life.supervisor.backlog_guard import needs_manager_decision
 from argus_skill.verticals.research_discovery import expansion
 
 
@@ -186,6 +187,14 @@ def test_no_bet_enqueues_one_immutable_near_far_request_and_keeps_siblings(
     assert request["available_frontier_slots"] == 5
     assert [item.id for item in backlog.all()][0] == sibling.id
     assert len(backlog.all()) == 2
+    automatic_task = backlog.all()[1]
+    assert automatic_task.manager_decision == {
+        "routed": True,
+        "vertical": "research_discovery",
+        "stage": "decide",
+        "workflow_mode": "staged",
+    }
+    assert needs_manager_decision(automatic_task) is False
 
 
 def test_stagnation_redesigns_once_then_expands_on_distinct_second_result(

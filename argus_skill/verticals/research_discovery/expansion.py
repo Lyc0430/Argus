@@ -338,6 +338,12 @@ def _request_task(request: Mapping[str, Any]) -> BacklogItem:
             "converting an execution failure into scientific evidence."
         ),
         non_goals=["cross-Vertical handoff", "paper completion", "production deployment"],
+        manager_decision={
+            "routed": True,
+            "vertical": "research_discovery",
+            "stage": "decide",
+            "workflow_mode": "staged",
+        },
     )
 
 
