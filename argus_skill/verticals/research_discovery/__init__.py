@@ -15,6 +15,7 @@ from .stages import (
     WORKFLOW_MODE,
     after_mission,
     completion_gate,
+    completion_issue,
     role_banner,
 )
 
@@ -47,7 +48,6 @@ __all__ = [
 _EVIDENCE_EXPORTS = {
     "APPLICATION_EVIDENCE",
     "THEORY_EVIDENCE",
-    "completion_issue",
     "content_digest",
     "main",
     "premise_digest",

@@ -161,7 +161,12 @@ CHECKLIST_ITEMS: dict[str, tuple[ChecklistItem, ...]] = {
 
 def completion_issue(project_root: object) -> str:
     from .evidence import completion_issue as validate_completion
-    return validate_completion(project_root)
+    issue = validate_completion(project_root)
+    if issue:
+        return issue
+    from .expansion import automatic_expansion_issue
+
+    return automatic_expansion_issue(Path(project_root))
 
 
 def after_mission(**context: object) -> dict[str, object]:

@@ -20,6 +20,7 @@ from argus_skill.core.evidence_status import (
 
 SCHEMA_VERSION = 1
 BET_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+EXPANSION_EVENT_ID = re.compile(r"^evt-[A-Za-z0-9_-]+$")
 DECISIONS = frozenset({"recommended", "no_bet", "paused"})
 CANDIDATE_STATES = frozenset({"probe", "park", "select", "kill"})
 NEXT_VERTICALS = frozenset({"math", "research", "software"})
@@ -258,6 +259,102 @@ def _validate_bet(payload: Mapping[str, Any], bet_id: str) -> list[str]:
         errors.append("candidate_state is invalid")
     if not _string_list(payload.get("limitations")):
         errors.append("limitations must be a non-empty list of strings")
+
+    if "lineage" in payload:
+        lineage = _mapping(payload.get("lineage"))
+        lineage_keys = {
+            "source_event_id",
+            "parent_bet_ids",
+            "generation",
+            "radius",
+            "changed_dimensions",
+        }
+        if lineage is None or set(lineage) != lineage_keys:
+            errors.append("lineage must contain exactly the five derivation fields")
+        else:
+            event_id = lineage.get("source_event_id")
+            if not isinstance(event_id, str) or not EXPANSION_EVENT_ID.fullmatch(event_id):
+                errors.append("lineage.source_event_id must be a safe expansion event ID")
+            parents = lineage.get("parent_bet_ids")
+            if (
+                not isinstance(parents, list)
+                or not parents
+                or any(
+                    not isinstance(parent, str) or not BET_ID.fullmatch(parent)
+                    for parent in parents
+                )
+                or len(parents) != len(set(parents))
+            ):
+                errors.append("lineage.parent_bet_ids must contain unique safe Bet IDs")
+            generation = lineage.get("generation")
+            if (
+                isinstance(generation, bool)
+                or not isinstance(generation, int)
+                or generation <= 0
+            ):
+                errors.append("lineage.generation must be a positive integer")
+            radius = lineage.get("radius")
+            if radius not in {"near", "far"}:
+                errors.append("lineage.radius must be near or far")
+            changed = lineage.get("changed_dimensions")
+            allowed_changes = {"mechanism", "estimand", "prediction"}
+            if (
+                not isinstance(changed, list)
+                or not changed
+                or any(
+                    not isinstance(dimension, str)
+                    or dimension not in allowed_changes
+                    for dimension in changed
+                )
+                or len(changed) != len(set(changed))
+            ):
+                errors.append(
+                    "lineage.changed_dimensions must name unique mechanism, "
+                    "estimand, or prediction changes"
+                )
+            if radius == "far":
+                transfer = _mapping(payload.get("theory_transfer"))
+                transfer_keys = {
+                    "source_domain",
+                    "source_mechanism",
+                    "target_role_mapping",
+                    "new_prediction",
+                    "negative_transfer_boundary",
+                    "target_domain_probe",
+                }
+                if transfer is None or set(transfer) != transfer_keys:
+                    errors.append(
+                        "theory_transfer must contain exactly the six R2 transfer fields"
+                    )
+                else:
+                    _require_texts(
+                        transfer,
+                        (
+                            "source_domain",
+                            "source_mechanism",
+                            "new_prediction",
+                            "negative_transfer_boundary",
+                            "target_domain_probe",
+                        ),
+                        errors,
+                        "theory_transfer.",
+                    )
+                    mappings = transfer.get("target_role_mapping")
+                    if (
+                        not isinstance(mappings, list)
+                        or not mappings
+                        or any(
+                            not isinstance(row, Mapping)
+                            or set(row) != {"source_role", "target_role"}
+                            or not _text(row.get("source_role"))
+                            or not _text(row.get("target_role"))
+                            for row in mappings
+                        )
+                    ):
+                        errors.append(
+                            "theory_transfer.target_role_mapping requires source_role "
+                            "and target_role rows"
+                        )
 
     problem = _require_map(payload, "problem_anchor", errors, "")
     if problem is not None:
