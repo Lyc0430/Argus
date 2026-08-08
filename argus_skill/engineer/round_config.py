@@ -87,20 +87,22 @@ class EngineerConfig:
     sandbox_mode: str | None = None
     isolate_workdir: bool = False
     # Pipeline stages in which the engineer runs with codex's native live
-    # web_search enabled (``codex exec --search``). Default: the research stage,
-    # so idea discovery / literature grounding does REAL live search instead of
-    # cached/recalled results. Empty set → never enable it.
-    live_search_stages: frozenset[str] = frozenset({"research"})
+    # web_search enabled (``codex exec --search``). The generic research stage
+    # and research-discovery's discover stage both perform literature grounding,
+    # so they use REAL live search instead of cached/recalled results. Empty set
+    # → never enable it.
+    live_search_stages: frozenset[str] = frozenset({"research", "discover"})
 
 
 def _engineer_live_search(workdir: Any, stages: "frozenset[str]") -> bool:
     """Whether to enable codex ``--search`` for this engineer round.
 
     True when the project's current pipeline stage is in ``stages`` (default:
-    the research stage, where idea discovery happens). ``current_stage`` resolves
-    the framework default (``research``) when no ``PIPELINE_STATE`` exists yet, so
-    a fresh/bootstrapping project also gets live search during ideation. Any hard
-    error resolving the stage fails closed to False — never break the round.
+    the generic research stage or research-discovery's discover stage).
+    ``current_stage`` resolves the framework default (``research``) when no
+    ``PIPELINE_STATE`` exists yet, so a fresh/bootstrapping project also gets live
+    search during ideation. Any hard error resolving the stage fails closed to
+    False — never break the round.
     """
     if not stages:
         return False

@@ -1,11 +1,12 @@
 """codex live web_search (idea-stage) wiring — the ``web_search="live"`` feature.
 
-Idea discovery runs in the research stage; there the engineer enables codex's
-native live web_search so literature grounding is real, not cached/recalled.
+Idea discovery runs in the generic research stage or research-discovery's
+discover stage; there the engineer enables codex's native live web_search so
+literature grounding is real, not cached/recalled.
 These tests pin the three links of the chain:
   1. RunnerOptions.live_search -> ``-c web_search="live"`` in the codex command
   2. the core->agent_cli options translation carries the flag
-  3. the research-stage gate turns it on for research, off elsewhere
+  3. the stage gate turns it on for research/discover, off elsewhere
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import tempfile
 from argus_skill.agent_cli.agent_cli_runner import AgentCliRunner
 from argus_skill.agent_cli.agent_cli_runner import RunnerOptions as AcOpts
 from argus_skill.core.models import RunnerOptions as CoreOpts
+from argus_skill.engineer.round_config import EngineerConfig
 from argus_skill.engineer.runner import _engineer_live_search
 
 
@@ -53,6 +55,19 @@ def test_stage_gate_research_on_others_off():
     assert _engineer_live_search(d, stages) is False
     _set("run")
     assert _engineer_live_search(d, stages) is False
+
+
+def test_research_discovery_stage_enables_live_search_by_default():
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, "research"), exist_ok=True)
+    with open(os.path.join(d, "research", "PIPELINE_STATE.json"), "w") as fh:
+        json.dump(
+            {"current_stage": "discover", "vertical": "research_discovery"},
+            fh,
+        )
+
+    config = EngineerConfig(model="gpt-5.5")
+    assert _engineer_live_search(d, config.live_search_stages) is True
 
 
 def test_stage_gate_empty_stages_never_on():
